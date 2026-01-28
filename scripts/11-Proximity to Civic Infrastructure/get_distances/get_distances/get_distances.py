@@ -2,13 +2,20 @@ import warnings
 # Suppress SyntaxWarnings from the googleplaces library (is vs ==)
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
-from googleplaces import GooglePlaces
 import pandas as pd
 import os
 import numpy as np
 import time
 
-# where to find googleplaces: https://github.com/slimkrazy/python-google-places
+try:
+    import requests
+except ImportError:
+    requests = None
+
+# NOTE:
+# This script previously used the third-party `googleplaces` library.
+# To avoid being billed for extra Place Details payload categories (Contact/Atmosphere/etc),
+# it now uses Places API (New) with a strict field mask that requests ONLY coordinates.
 
 # Set working directory to the parent directory (get_distances/)
 # script is in get_distances/get_distances/get_distances.py
@@ -35,13 +42,117 @@ api_key_path = os.path.join(working_dir, 'google_api_key.txt')
 try:
     with open(api_key_path, 'r') as f:
         API_KEY = f.read().strip()
-    google_places = GooglePlaces(API_KEY)
 except IOError:
     print(f"Warning: google_api_key.txt not found at {api_key_path}")
-    google_places = None
+    API_KEY = None
 
 # Search radius (approx 6.2 miles)
 max_search = 10000
+
+
+def _places_v1_search_nearby_location(api_key, zone_lat, zone_long, included_type, radius_meters, timeout_seconds=15):
+    """Return (lat, lng) for the nearest matching place, or None.
+
+    Uses Places API (New) Nearby Search endpoint and requests ONLY places.location.
+    """
+    if not api_key:
+        return None
+    if requests is None:
+        raise ImportError(
+            "The 'requests' package is required to call Places API (New). "
+            "Install it (pip install requests) or add it to your environment."
+        )
+
+    url = "https://places.googleapis.com/v1/places:searchNearby"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key,
+        # Request ONLY coordinates to minimize returned data.
+        "X-Goog-FieldMask": "places.location",
+    }
+    payload = {
+        "includedTypes": [str(included_type)],
+        "maxResultCount": 1,
+        "rankPreference": "DISTANCE",
+        "locationRestriction": {
+            "circle": {
+                "center": {"latitude": float(zone_lat), "longitude": float(zone_long)},
+                "radius": float(radius_meters),
+            }
+        },
+    }
+
+    response = requests.post(url, headers=headers, json=payload, timeout=timeout_seconds)
+
+    # If an includedTypes value is invalid for the API, the service returns a 400.
+    # In that case, fall back to a text search using the same field mask.
+    if response.status_code == 400:
+        return _places_v1_search_text_location(
+            api_key=api_key,
+            zone_lat=zone_lat,
+            zone_long=zone_long,
+            text_query=str(included_type),
+            radius_meters=radius_meters,
+            timeout_seconds=timeout_seconds,
+        )
+
+    response.raise_for_status()
+    data = response.json() if response.content else {}
+    places = data.get("places") or []
+    if not places:
+        return None
+
+    location = places[0].get("location") or {}
+    lat = location.get("latitude")
+    lng = location.get("longitude")
+    if lat is None or lng is None:
+        return None
+
+    return float(lat), float(lng)
+
+
+def _places_v1_search_text_location(api_key, zone_lat, zone_long, text_query, radius_meters, timeout_seconds=15):
+    """Fallback: Text Search (New) with strict field mask, returning nearest (lat, lng) or None."""
+    if not api_key:
+        return None
+    if requests is None:
+        raise ImportError(
+            "The 'requests' package is required to call Places API (New). "
+            "Install it (pip install requests) or add it to your environment."
+        )
+
+    url = "https://places.googleapis.com/v1/places:searchText"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key,
+        "X-Goog-FieldMask": "places.location",
+    }
+    payload = {
+        "textQuery": str(text_query),
+        "maxResultCount": 1,
+        "rankPreference": "DISTANCE",
+        "locationBias": {
+            "circle": {
+                "center": {"latitude": float(zone_lat), "longitude": float(zone_long)},
+                "radius": float(radius_meters),
+            }
+        },
+    }
+
+    response = requests.post(url, headers=headers, json=payload, timeout=timeout_seconds)
+    response.raise_for_status()
+    data = response.json() if response.content else {}
+    places = data.get("places") or []
+    if not places:
+        return None
+
+    location = places[0].get("location") or {}
+    lat = location.get("latitude")
+    lng = location.get("longitude")
+    if lat is None or lng is None:
+        return None
+
+    return float(lat), float(lng)
 
 
 def load_tract_zone_hh_from_elmer():
@@ -111,20 +222,23 @@ def distance(s_lat, s_lng, e_lat, e_lng):
     return 2 * R * np.arcsin(np.sqrt(d))
 
 def find_distance(zone_id, zone_lat, zone_long, amenity):
-    if google_places is None:
+    if API_KEY is None:
         return pd.Series([zone_id, -1])
     
     # Rate limiting: sleep 100ms between calls to avoid hitting rate limits
     time.sleep(0.1)
 
     try:
-        query_result = google_places.nearby_search(keyword=amenity,
-            lat_lng={'lat': zone_lat, 'lng': zone_long}, rankby = 'distance', 
-            radius=max_search)
+        nearest = _places_v1_search_nearby_location(
+            api_key=API_KEY,
+            zone_lat=zone_lat,
+            zone_long=zone_long,
+            included_type=amenity,
+            radius_meters=max_search,
+        )
 
-        if query_result.places:
-            nearest_lat = float(query_result.places[0].geo_location['lat'])
-            nearest_long = float(query_result.places[0].geo_location['lng'])
+        if nearest is not None:
+            nearest_lat, nearest_long = nearest
             dist_between = distance(zone_lat, zone_long, nearest_lat, nearest_long)
         else:
             print(f"No {amenity} found within {max_search}m for zone {zone_id}")
