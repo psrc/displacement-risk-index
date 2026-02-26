@@ -1,6 +1,6 @@
 # Project Background
 The Displacement Risk Index includes 15 indicators, all weighted equally, to identify census tracts and neighborhoods that are at higher risk of residential displacement. 
-The original index was created in 2018 (based on 2016 ACS data, ___ base year) and updated in 2021 (based on 2019 ACS data, 2018 base year). The 2026 update will be the second update (based on 2024 ACS data, 2023 base year).
+The original index was created in 2018 (based on 2016 ACS data, 2014 base year) and updated in 2021 (based on 2019 ACS data, 2018 base year). The 2026 update will be the second update (based on 2024 ACS data, 2023 base year).
 
 # Project Resources
 - Network project path: Y:\VISION 2050\Data\Displacement
