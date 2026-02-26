@@ -1,8 +1,8 @@
 ## Details about the indicator
-a) Number of jobs within 30 min auto drive
+a) Average number of jobs within 30 min auto drive for each census tract
 
-b) Number of jobs within 45 minutes transit ride for each parcel
+b) Average number of jobs within 45 minutes transit ride for each census tract
 
 
 ## Information about generating the data
-Standard model output, developed for for 2020 census tracts, based on the 2023 base year/2035 network.
+The data sets for this indicator are produced automatically from a standard Soundcast run - developed for the 2020 census tracts and based on the 2023 base year/2035 network.
