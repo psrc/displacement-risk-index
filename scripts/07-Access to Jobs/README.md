@@ -1,9 +1,9 @@
 ## Details about the indicator
 This measure represents the average number of jobs that are accessible within a certain time threshold from a home location. Two measures are created to represent variations by personal vehicle and transit.
 
-a) Average number of jobs within 30 min auto drive for each census tract
+a) Average number of jobs within **30 min auto drive** for each census tract
 
-b) Average number of jobs within 45 minutes transit ride for each census tract
+b) Average number of jobs within **45 minutes transit ride** for each census tract
 
 For auto trips, each pair of origin-destination TAZs is filtered to select only the zone pairs within a 30-minute auto trip, in the peak AM period (7 to 8 AM), for single-occupant vehicles (SOV), of income class 2 (out of 4 income classes, representing an average commuter type). These eligible zone pairs are joined to parcel level household and employment totals, which can be aggregated to any level of geography as a weighted average based on number of households in a parcel. For a given household, the measure represents the total number of potential jobs a person could access from their home location, based on the road network conditions in the morning peak period. When we aggregate this measure to represent larger areas like Census Tracts, the number represents an average that could reasonably be expected across that larger area. Weighting by total households in parcels helps account for locations within larger zones with higher populations that have greater or less accessibility than surrounding areas.
 
