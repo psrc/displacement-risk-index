@@ -12,7 +12,7 @@ The same approach is used for transit trips, except that a threshold of 45 minut
 The script that generates these data sets is part of standard Soundcast summaries and can be found in the [Soundcast repo](https://github.com/psrc/soundcast/blob/master/scripts/summarize/standard/job_accessibility.py)
 
 ## Information about generating the data
-The data sets for this indicator are produced automatically from a standard Soundcast run - developed for the 2020 census tracts and based on the 2023 base year/2035 network.
+The data sets for this indicator are produced automatically from a standard Soundcast run - developed for the 2020 census tracts and based on the 2035 network and 2035 jobs/population values. 
 
 The raw outputs (`auto_jobs_access.csv` and `transit_jobs_access.csv`) are saved to the model project folder (\\AWS-Model10\Model Data 2\rtp_2026_2050\final_runs\sc_rtp_2035\soundcast\outputs\access). To avoid unintentional edits to the model output data, we copy/paste the CSV files to the network project folder within the indicator\data subfolder. 
 
