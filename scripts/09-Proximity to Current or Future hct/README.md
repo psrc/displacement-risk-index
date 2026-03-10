@@ -3,3 +3,8 @@ Percent of tract area within ¼ mile of 2035 BRT and ½ mile of other 2035 high 
 
 ## Information about generating the data
 To generate the data set that will be used in the datagen and vis scripts, please run Python script []. Follow instructions below.
+1. Pull script down to your local machine
+2. Update the file paths in the config.toml file if necessary
+3. Update the output path so that it doesn't overwrite the current data. Just renaming the CSV should do.
+4. Click "run python file" the play button in the top right corner, it should run the script. Run it in the summary environment
+5. The script will run and it will produce a csv of output data for percentage of area in a census tract within 1/4 mile of BRT and 1/2 mile of other high capacity transit. 
