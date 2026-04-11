@@ -1,17 +1,8 @@
 import geopandas as gpd
 import pandas as pd
-from sqlalchemy import column
-import getElmerGeo as geg
+import psrcelmerpy
 
-working_dir = r'Y:\VISION 2050\Data\Displacement\Displacement Index 2021\data\11-Proximity to Civic Infrastructure\Schools'
-elmer_geo_conn_string = (
-    r'Driver=SQL Server;'
-    r'Server=AWS-Prod-SQL\Sockeye;'
-    r'Database=ElmerGeo;'
-    r'Trusted_Connection=yes;'
-    )
-version= "'sde.DEFAULT'"
-crs = {'init' : 'EPSG:2285'}
+working_dir = r'Y:\VISION 2050\Data\Displacement\Displacement Index 2026\scripts\10-Proximity to Core Business'
 
 def main():
     ## Get parcels by TAZ from UrbanSim output
@@ -40,16 +31,14 @@ def main():
     taz_hh_weights.rename(columns={'Census2010Tract':'GEOID', 'taz_p':'TAZ', 'hh_p_x':'hh_intersect', 'hh_p_y':'hh_tract', 'hh_weights':'hh_weights'}, inplace=True)
 
     ### Calculate weights by proportion of area (for tracts with no households)
-    # Connect to Elmer
-    taz = geg.read_from_sde(elmer_geo_conn_string,
-                                        'taz2010_evw',
-                                        version, crs=crs, is_table=False)
+    # Connect to ElmerGeo
+    eg_conn = psrcelmerpy.ElmerGeoConn()
+
+    taz = eg_conn.read_geolayer('taz2010_evw')
     taz_sub = taz[['OBJECTID', 'geometry']]
     taz_sub.rename(columns={"OBJECTID":"TAZ"}, inplace=True)
 
-    tracts = geg.read_from_sde(elmer_geo_conn_string,
-                                        'tract2020_evw',
-                                        version, crs=crs, is_table=False)
+    tracts = eg_conn.read_geolayer('tract2020_evw')
     tracts_sub = tracts[['geoid20', 'geometry']]
     tracts_sub.rename(columns={"geoid20":"GEOID"}, inplace=True)
     tracts_sub['TRACTarea'] = tracts_sub['geometry'].area

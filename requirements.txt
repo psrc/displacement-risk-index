@@ -1,0 +1,17 @@
+﻿certifi==2026.1.4
+geopandas==1.1.2
+greenlet==3.3.1
+numpy==2.4.1
+packaging==26.0
+pandas==3.0.0
+psrcelmerpy @ git+https://github.com/psrc/psrcelmerpy.git@0917eddea55cfdeecf2a6a1f6cd9d49d588cb2d6
+pyodbc==5.3.0
+pyogrio==0.12.1
+pyproj==3.7.2
+python-dateutil==2.9.0.post0
+python-google-places==1.4.2
+shapely==2.1.2
+six==1.17.0
+SQLAlchemy==2.0.46
+typing_extensions==4.15.0
+tzdata==2025.3

@@ -17,11 +17,9 @@ except ImportError:
 # To avoid being billed for extra Place Details payload categories (Contact/Atmosphere/etc),
 # it now uses Places API (New) with a strict field mask that requests ONLY coordinates.
 
-# Set working directory to the parent directory (get_distances/)
-# script is in get_distances/get_distances/get_distances.py
+# Inputs/outputs (CSV files + google_api_key.txt) are expected alongside this script by default.
 script_dir = os.path.dirname(os.path.abspath(__file__))
-# Data directory is .../11-Proximity to Civic Infrastructure/get_distances/
-working_dir = os.path.dirname(script_dir)
+working_dir = script_dir
 
 # ================= CONFIGURATION =================
 TEST_MODE = False  # Set to True to test with minimal API calls (1 zone, 3 amenities)
@@ -48,6 +46,7 @@ except IOError:
 
 # Search radius (approx 6.2 miles)
 max_search = 10000
+MAX_SEARCH_MILES = max_search / 1609.344
 
 
 def _places_v1_search_nearby_location(api_key, zone_lat, zone_long, included_type, radius_meters, timeout_seconds=15):
@@ -209,7 +208,7 @@ def load_tract_zone_hh_from_elmer():
     return tract_zone_hh
 
 def distance(s_lat, s_lng, e_lat, e_lng):
-    # approximate radius of earth in km
+    # approximate radius of earth in miles
     R = 3959.0
     
     s_lat = s_lat*np.pi/180.0                      
@@ -223,7 +222,8 @@ def distance(s_lat, s_lng, e_lat, e_lng):
 
 def find_distance(zone_id, zone_lat, zone_long, amenity):
     if API_KEY is None:
-        return pd.Series([zone_id, -1])
+        # Missing API key: return the maximum search distance (capped).
+        return pd.Series([zone_id, MAX_SEARCH_MILES])
     
     # Rate limiting: sleep 100ms between calls to avoid hitting rate limits
     time.sleep(0.1)
@@ -242,11 +242,12 @@ def find_distance(zone_id, zone_lat, zone_long, amenity):
             dist_between = distance(zone_lat, zone_long, nearest_lat, nearest_long)
         else:
             print(f"No {amenity} found within {max_search}m for zone {zone_id}")
-            dist_between = -1
+            # No result found: cap at the maximum search distance.
+            dist_between = MAX_SEARCH_MILES
     except Exception as e:
         print(f"Error calling API for zone {zone_id} amenity {amenity}: {e}")
-        # Return -1 to indicate error/no result found
-        dist_between = -1
+        # Error: cap at the maximum search distance.
+        dist_between = MAX_SEARCH_MILES
 
     return pd.Series([zone_id, dist_between])
 
@@ -274,17 +275,28 @@ def get_tract_distances(zones_distances, tract_zones_hh):
     g = zone_dist_tract.groupby('GEOID')
 
     def weighted_avg(x):
+        # Compute per-amenity averages while ignoring NaN distances.
+        # If all values for an amenity are NaN, the tract-level value remains NaN.
         try:
-            if x['hh_p'].sum() > 0:
-                return pd.Series(np.average(x[amenity_types], weights=x['hh_p'], axis=0), index=amenity_types)
-            else:
-                return pd.Series(np.average(x[amenity_types], axis=0), index=amenity_types)
-        except ZeroDivisionError:
-             return pd.Series([np.nan]*len(amenity_types), index=amenity_types)
-        except Exception:
-             return pd.Series([np.nan]*len(amenity_types), index=amenity_types)
+            weights = pd.to_numeric(x.get('hh_p'), errors='coerce').fillna(0)
+            out = {}
+            for amenity in amenity_types:
+                values = pd.to_numeric(x.get(amenity), errors='coerce')
+                valid = values.notna()
+                if not valid.any():
+                    out[amenity] = np.nan
+                    continue
 
-    tract_distances = g.apply(weighted_avg, include_groups=False)
+                if weights.loc[valid].sum() > 0:
+                    out[amenity] = float(np.average(values.loc[valid], weights=weights.loc[valid]))
+                else:
+                    out[amenity] = float(np.average(values.loc[valid]))
+
+            return pd.Series(out, index=amenity_types)
+        except Exception:
+            return pd.Series([np.nan] * len(amenity_types), index=amenity_types)
+
+    tract_distances = g.apply(weighted_avg)
     return tract_distances
 
 def main():
