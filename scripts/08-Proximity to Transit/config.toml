@@ -9,7 +9,7 @@ geographic = "EPSG:4326"
 quarter_mile_feet = 1320.0
 
 [paths]
-transit_stops_csv = 'N:\rtp_2026_2050\final_runs\sc_base_year_2023_final\soundcast\inputs\scenario\networks\transit_stops.csv'
+transit_stops_csv = 'R:\e2projects_two\SoundCast\Inputs\rtp_2026_2050\networks\2023\base_year_2023_post_rtp\transit_stops.csv'
 parcels_txt = 'N:\rtp_2026_2050\final_runs\sc_base_year_2023_final\soundcast\inputs\scenario\landuse\parcels_urbansim.txt'
 hh_persons_h5 = 'N:\rtp_2026_2050\final_runs\sc_base_year_2023_final\soundcast\inputs\scenario\landuse\hh_and_persons.h5'
 soundcast_db_url = 'sqlite:///N:/rtp_2026_2050/final_runs/sc_base_year_2023_final/soundcast/inputs/db/soundcast_inputs_2023.db'
