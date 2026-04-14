@@ -43,7 +43,7 @@ MAP_HTML = OUTPUT_DIR / CONFIG["output_files"]["map_html"]
 # ============
 def load_hct_stations(stops_csv: Path) -> gpd.GeoDataFrame:
     df = pd.read_csv(stops_csv)
-    hct_cols = ["commuter_rail", "light_rail", "ferry", "brt"]
+    hct_cols = ["commuter_rail", "light_rail", "ferry", "brt", "street_car"]
     df["hct"] = (df[hct_cols].sum(axis=1) > 0).astype(int)
     df_hct = df[df["hct"] == 1].copy()
 
@@ -174,7 +174,8 @@ def build_population_map(
                     f"Light Rail: {'Yes' if r.get('light_rail', 0) else 'No'}<br>"
                     f"BRT: {'Yes' if r.get('brt', 0) else 'No'}<br>"
                     f"Commuter Rail: {'Yes' if r.get('commuter_rail', 0) else 'No'}<br>"
-                    f"Ferry: {'Yes' if r.get('ferry', 0) else 'No'}"
+                    f"Ferry: {'Yes' if r.get('ferry', 0) else 'No'}<br>"
+                    f"Street Car: {'Yes' if r.get('street_car', 0) else 'No'}"
                 ),
                 axis=1,
             ),
@@ -233,7 +234,6 @@ def main() -> None:
 
     print("[Done] Displaying map...")
     fig.show()
-
 
 if __name__ == "__main__":
     main()
