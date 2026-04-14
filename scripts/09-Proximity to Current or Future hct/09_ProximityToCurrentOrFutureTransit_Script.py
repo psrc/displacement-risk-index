@@ -42,8 +42,8 @@ def load_transit_stops(file_path: Path) -> pd.DataFrame:
 def classify_hct_stops(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     df = df.copy()
 
-    # 0.5-mile set: commuter rail, light rail, ferry, express
-    df["hct_0_5"] = (df[["commuter_rail", "light_rail", "ferry", "express"]].sum(axis=1) > 0).astype(int)
+    # 0.5-mile set: commuter rail, light rail, ferry, express, street car
+    df["hct_0_5"] = (df[["commuter_rail", "light_rail", "ferry", "express", "street_car"]].sum(axis=1) > 0).astype(int)
     df_hct_05 = df[df["hct_0_5"] == 1].copy()
 
     # 0.25-mile set: brt
@@ -123,8 +123,6 @@ def calculate_area_coverage(
         result.loc[mask, "quarter_mile_hct_sq_ft"] / result.loc[mask, "total_area"]
     )
     return result
-    # result["percent_hct"] = result["quarter_mile_hct_sq_ft"] / result["total_area"].fillna(0)
-    # return result
 
 
 def main() -> None:
