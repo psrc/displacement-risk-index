@@ -2,3 +2,12 @@
 The distance (miles) to schools and parks by census tract. These values are based on current population (2023 base year) and are weighted by the total population (not households). 
 
 ## Information about generating the data
+To generate the data set that will be used in the datagen and vis scripts, please run Python script 11-ProximityToCivicInfrastructure_Parks.py for distance to parks or 11-ProximityToCivicInfrastructure_Schools.py for distance to schools. Follow instructions below.
+
+Pull script down to your local machine
+Update the file paths in the config.toml file if necessary
+The file paths in the config.toml file are from the Network drive. Sometimes these files may be slow to load so it can be helpful to copy them locally and run the code with local file paths. Specifically, the parcels_urbanism.csv can be slow to load.
+Update the output path so that it doesn't overwrite the current data. Just renaming the CSV should do.
+Click "run python file" the play button in the top right corner, it should run the script. Run it in the summary environment
+The script will run and it will produce a csv of output data with the average distance in miles to schools or parks by census tract wieghted by total population. 
+The testing folders have the python jupyter notebook which was used to test and write the scripts. You can walk through the process there, although it is not very well cleaned up. 
