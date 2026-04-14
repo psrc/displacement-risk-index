@@ -6,7 +6,7 @@ quarter_mile_feet = 1320.0
 half_mile_feet = 2640.0
 
 [paths]
-transit_stops_csv = 'N:\rtp_2026_2050\final_runs\sc_base_year_2023_final\soundcast\inputs\scenario\networks\transit_stops.csv'
+transit_stops_csv = 'R:\e2projects_two\SoundCast\Inputs\rtp_2026_2050\networks\2023\base_year_2023_post_rtp\transit_stops.csv'
 output_dir = 'Y:\VISION 2050\Data\Displacement\Displacement Index 2026\data\09-Proximity to Current or Future hct'
 
 [output_files]
