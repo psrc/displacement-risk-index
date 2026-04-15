@@ -4,5 +4,5 @@ base_year = "2023"
 [paths]
 parcels_txt = 'N:\rtp_2026_2050\final_runs\sc_base_year_2023_final\soundcast\inputs\scenario\landuse\parcels_urbansim.txt'
 db_url = 'sqlite:///N:/rtp_2026_2050/final_runs/sc_base_year_2023_final/soundcast/inputs/db/soundcast_inputs_2023.db'
-output_path = 'Y:\VISION 2050\Data\Displacement\Displacement Index 2021\data\11-Proximity to Civic Infrastructure\11_b_ProximityCivicInfraPark_new.csv'
+output_path = 'Y:\VISION 2050\Data\Displacement\Displacement Index 2026\data\11-Proximity to Civic Infrastructure\11_b_ProximityCivicInfraPark.csv'
 hh_persons_h5 = 'N:\rtp_2026_2050\final_runs\sc_base_year_2023_final\soundcast\inputs\scenario\landuse\hh_and_persons.h5'
