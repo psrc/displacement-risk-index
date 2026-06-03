@@ -1,13 +1,96 @@
-# Generate indicator dataset ------------------------------------------------
+# Generate indicator data set
 
-# Libraries -----------------------------------------------
+# Libraries --------------------------------------
 # install.packages(tidyverse)
 # install.packages(tidycensus)
 library(tidyverse)
 library(tidycensus)
+library(psrccensus)
+library(sf)
 
 # Working directory
-setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2021")
+setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2026")
+
+# The 2021 update (2019 ACS data) accessed the survey data using the API, which required a key (http://api.census.gov/data/key_signup.html), but since 2021, the psrccensus library was developed. The 2026 (2024 ACS data) update will access the survey data using psrccensus (https://psrc.github.io/psrccensus/articles/psrccensus.html).
+acs_data_year <- "2024"
+
+# Accessing ACS data --------------------------------------
+# 5y estimates, by tract
+base_acs_data <- get_acs_recs(geography ='tract', 
+                              table.names = 'B25003', #Tenure
+                              years = c(as.numeric(acs_data_year)),
+                              acs.type = 'acs5')
+
+## Transforming data ----
+# Define variables of interest (and order based on 2021 update data)
+variables_list <- c("B25003_001", #Estimate!!Total
+                    "B25003_003") #Estimate!!Total:!!Renter occupied
+
+
+acs_data <- base_acs_data %>%
+  filter(variable %in% variables_list) %>% 
+  mutate(rent_cat = case_when(variable=="B25003_001"~"total_ho",
+                              variable=="B25003_003"~"total_rent")) %>% 
+  dplyr::select(GEOID, rent_cat, estimate, moe) %>% # simplify data set
+  rename(est=estimate) %>% # to match 2021 data
+  pivot_wider(names_from = rent_cat, 
+              values_from = c(est, moe)) # pivot data to facilitate calculations
+
+## Calculate percentage of renters by census tract ----
+rent_calc <- acs_data %>% 
+  mutate(prop_rent = est_total_rent/est_total_ho,
+         per_rent = prop_rent * 100)
+
+
+# Creating spatial data set --------------------------------------
+
+## Calculating reliability measures for ACS estimates ----
+# old method (2021 update): manual calculations using SE and z-score of 1.645
+# new method (2026 update): using moe_sum() from the tidycensus library (https://psrc.github.io/psrccensus/articles/calculate-reliability-moe-transformed-acs.html)
+
+# use the moe_prop function from tidycensus: moe_prop(num, denom, moe_num, moe_denom)
+rent_moe_values <- rent_calc %>%
+  # rowwise() %>%
+  mutate(moe_prop_rent=moe_prop(num=est_total_rent,
+                                denom=est_total_ho, 
+                                moe_num=moe_total_rent, 
+                                moe_denom=moe_total_ho )) %>%
+  reliability_calcs(estimate='prop_rent', 
+                    moe='moe_prop_rent')
+
+
+# Connecting to ElmerGeo for census geographies through Portal, instead of saving spatial file to the project folder
+arc_service <- "https://services6.arcgis.com/GWxg6t7KXELn1thE/arcgis/rest/services"
+tracts20.url <- file.path(arc_service, "Census_Tracts_2020/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson")
+tract <- st_read(tracts20.url)
+
+
+## Joining spatial and tabular data by tract ----
+tract <- merge(tract, rent_moe_values,
+               by.x="geoid20",
+               by.y="GEOID",
+               all.x=TRUE)
+
+tract$per_rent <- round(tract$per_rent, digits = 2)
+
+
+# Exporting data sets ----------------------------------------------- 
+
+## Final data set for percentage by census tract, plus calculation components ----
+rent <- rent_calc %>% select(GEOID, starts_with("est"), per_rent)
+write_csv(rent, file = "./data/04-Housing Tenancy/04_HousingTenancy.csv")
+
+## Final data set with tract information and MOE calculations ----
+write_rds(tract, "./data/04-Housing Tenancy/tract_04_HousingTenancy.rds")
+
+# To compare with 2021 update:
+# rds_2021 <- readRDS("Y:/VISION 2050/Data/Displacement/Displacement Index 2021/data/04-Housing Tenancy/tract_04_HousingTenancy.rds")
+
+
+
+
+
+
 
 # ACS key to access the survey data. Key can be obtained from: http://api.census.gov/data/key_signup.html 
 # Run once to add CENSUS API key to .Renviron file
