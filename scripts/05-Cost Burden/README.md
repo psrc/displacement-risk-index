@@ -6,4 +6,4 @@ Cost burden is defined as household income less than or equal to 80% of HAMFI an
 Severe cost burden is defined as as household income less than or equal to 80% of HAMFI and monthly housing costs greater than **50%** of monthly income.
 
 ## Information about generating the data
-The data is processed and stored within Elmer. Information about accessing the data is included in the [Data wiki](http://aws-linux/mediawiki/index.php/Elmer_CHAS_Data). CHAS data are updated on a different timeline than ACS data, and a few years behind due to the additional details included in the datasets Please reach out to Chris to request an update once the new data are made available.
+The data is processed and stored within Elmer. Information about accessing the data is included in the [Data wiki](http://aws-linux/mediawiki/index.php/Elmer_CHAS_Data). CHAS data are updated on a different timeline than ACS data, and a few years behind due to the additional details included in the datasets. Please reach out to Chris to request an update once the new data are made available.
