@@ -1,123 +1,112 @@
-# Generate indicator dataset ------------------------------------------------
+# Generate indicator data set
 
-# Libraries -----------------------------------------------
+# Libraries --------------------------------------
 # install.packages("tidyverse")
 # install.packages("tidycensus")
 library(tidyverse)
 library(tidycensus)
+library(psrccensus)
+library(sf)
 
 # Working directory
-setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2021")
+setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2026") 
 
-# ACS key to access the survey data. Key can be obtained from: http://api.census.gov/data/key_signup.html 
-# Run once to add CENSUS API key to .Renviron file
-# census_api_key("16995506559e358a55d32e63541106a22b34acd7",install = TRUE)
-readRenviron("~/.Renviron")
+# The 2021 update (2019 ACS data) accessed the survey data using the API, which required a key (http://api.census.gov/data/key_signup.html), but since 2021, the psrccensus library was developed. The 2026 (2024 ACS data) update will access the survey data using psrccensus (https://psrc.github.io/psrccensus/articles/psrccensus.html).
+acs_data_year <- "2024"
 
-# Name of ACS databases
-v15 <- load_variables(2019, "acs5", cache = TRUE)
+# Accessing ACS data --------------------------------------
+# 5y estimates, by tract
+base_acs_data <- get_acs_recs(geography ='tract', 
+                              table.names = 'B03002', #subject table code
+                              years = c(as.numeric(acs_data_year)),
+                              acs.type = 'acs5')
 
-# Race other than non-Hispanic White --------------------------------------
+## Transforming data ----
+# Define variables of interest (and order based on 2021 update data)
+variables_list <- c("B03002_001", #Estimate!!Total
+                    "B03002_003", #Estimate!!Total:!!Not Hispanic or Latino:!!White alone
+                    "B03002_013", #Estimate!!Total:!!Hispanic or Latino:!!White alone 
+                    "B03002_002", #Estimate!!Total:!!Not Hispanic or Latino
+                    "B03002_012") #Estimate!!Total:!!Hispanic or Latino)
 
-# Download data from ACS api
-# Rename variables
-total_race      <- get_acs(geography = "tract", variables = "B03002_001E", year = 2019, county = c("033","035","053","061"), state = "53")
-total_race      <- rename(total_race, est_total_race = "estimate" )
-total_race      <- rename(total_race, moe_total_race = "moe" )
+acs_data <- base_acs_data %>%
+  filter(variable %in% variables_list) %>% 
+  mutate(variable=factor(variable, levels = variables_list)) %>% # to match 2021 data
+  arrange(variable) %>% # to match 2021 data
+  mutate(race_cat = case_when(variable=="B03002_001"~"total_race",
+                              variable=="B03002_003"~"nhispanic_white",
+                              variable=="B03002_013"~"hispanic_white",
+                              variable=="B03002_002"~"total_nhispanic",
+                              variable=="B03002_012"~"total_hispanic")) %>% 
+  dplyr::select(GEOID, race_cat, estimate, moe) %>% # simplify data set
+  rename(est=estimate) %>% # to match 2021 data
+  pivot_wider(names_from = race_cat, 
+              values_from = c(est, moe)) # pivot data to facilitate calculations
 
-nhispanic_white <- get_acs(geography = "tract", variables = "B03002_003E", year = 2019, county = c("033","035","053","061"), state = "53")
-nhispanic_white <- rename(nhispanic_white, est_nhispanic_white = "estimate" )
-nhispanic_white <- rename(nhispanic_white, moe_nhispanic_white = "moe" )
-
-hispanic_white  <- get_acs(geography = "tract", variables = "B03002_013E", year = 2019, county = c("033","035","053","061"), state = "53")
-hispanic_white  <- rename(hispanic_white, est_hispanic_white = "estimate" )
-hispanic_white  <- rename(hispanic_white, moe_hispanic_white = "moe" )
-
-total_nhispanic <- get_acs(geography = "tract", variables = "B03002_002E", year = 2019, county = c("033","035","053","061"), state = "53")
-total_nhispanic <- rename(total_nhispanic, est_total_nhispanic = "estimate" )
-total_nhispanic <- rename(total_nhispanic, moe_total_nhispanic = "moe" )
-
-total_hispanic  <- get_acs(geography = "tract", variables = "B03002_012E", year = 2019, county = c("033","035","053","061"), state = "53")
-total_hispanic  <- rename(total_hispanic, est_total_hispanic = "estimate" )
-total_hispanic  <- rename(total_hispanic, moe_total_hispanic = "moe" )
-
-# Outer join of datasets
-race <- total_race %>%
-  select(-NAME, -variable) %>%
-  full_join(nhispanic_white, by = "GEOID") %>% 
-  select(-NAME, -variable) %>%
-  full_join(hispanic_white, by = "GEOID") %>%
-  select(-NAME, -variable) %>%
-  full_join(total_nhispanic, by = "GEOID") %>%
-  select(-NAME, -variable) %>%
-  full_join(total_hispanic, by = "GEOID") %>%
-  select(-NAME, -variable)
-
-# Calculate percentage of non-Hispanic White by census tract
-race <- race %>% 
-  mutate(prop_notwhite = (est_total_hispanic + est_total_nhispanic - est_nhispanic_white) / est_total_race,
+## Calculating proportion and percent of POC by census tract ----
+# old method (2021 update): prop_notwhite = (est_total_hispanic + est_total_nhispanic - est_nhispanic_white) / est_total_race
+# new method (2026 update): simplified - using fewer variables with larger sample yields a better MOE 
+race_calc <- acs_data %>% 
+  mutate(prop_notwhite = (est_total_race - est_nhispanic_white) / est_total_race,
          per_notwhite = prop_notwhite * 100)
 
-# Create spatial dataset with MOE calculation
-tract <- read_sf("Y:/VISION 2050/Data/Displacement/Displacement_Risk_Script/gis/tract2010_nowater.shp")
 
-tract <- tract %>%
-  mutate(GEOID = factor(GEOID10))
-# project tracts
-tract <- st_transform(tract, 4269)
+# Creating spatial data set --------------------------------------
 
-# join databases  ----------------------------------------------- 
-tract <- tract %>%
-  left_join(race %>%
-              mutate(GEOID = factor(GEOID), 
-                     county = factor(str_sub(GEOID, 1, 5))), by = ("GEOID")) 
+## Calculating reliability measures for ACS estimates ----
+# old method (2021 update): manual calculations using SE and z-score of 1.645
+# new method (2026 update): using moe_prop() from the tidycensus library (https://psrc.github.io/psrccensus/articles/calculate-reliability-moe-transformed-acs.html)
+
+# use the moe_prop function from tidycensus: moe_prop(num, denom, moe_num, moe_denom)
+tract_moe_prop <- tract %>% 
+  dplyr::mutate(prop_white=(est_nhispanic_white/est_total_race),
+                moe_prop=tidycensus::moe_prop(num=est_nhispanic_white,
+                                              denom=est_total_race,
+                                              moe_num=moe_nhispanic_white, 
+                                              moe_denom=moe_total_race)) %>% 
+  reliability_calcs(estimate='prop_white', 
+                    moe='moe_prop') %>% 
+  mutate(est_POC=est_total_race-est_nhispanic_white,
+         prop_POC=est_POC/est_total_race)
+
+# use the moe_sum function from tidycensus: moe_sum(moe, estimate = NULL, na.rm = FALSE)
+# use the moe_prop function from tidycensus: moe_prop(num, denom, moe_num, moe_denom)
+notwhite_moe_values <- race_calc %>%
+  # rowwise() %>%
+  mutate(est_notwhite=(est_total_race - est_nhispanic_white)) %>% 
+  mutate(moe_est_notwhite=moe_sum(estimate=c(est_total_race, est_nhispanic_white),
+                                  moe=c(moe_total_race, moe_nhispanic_white))) %>%
+  mutate(moe_prop_notwhite=moe_prop(num=est_notwhite,
+                                    denom=est_total_race, 
+                                    moe_num=moe_est_notwhite, 
+                                    moe_denom=moe_total_race)) %>%
+  reliability_calcs(estimate='prop_notwhite', 
+                    moe='moe_prop_notwhite')
+
+
+# Connecting to ElmerGeo for census geographies through Portal, instead of saving spatial file to the project folder
+arc_service <- "https://services6.arcgis.com/GWxg6t7KXELn1thE/arcgis/rest/services"
+tracts20.url <- file.path(arc_service, "Census_Tracts_2020/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson")
+tract <- st_read(tracts20.url)
+
+
+## Joining spatial and tabular data by tract ----
+tract <- merge(tract, notwhite_moe_values,
+               by.x="geoid20",
+               by.y="GEOID",
+               all.x=TRUE)
 
 tract$per_notwhite <- round(tract$per_notwhite, digits = 2)
 
-# margin of error for
-# 1. count of POC per tract
-# 2. proportion of POC by tract
-# ACS MOE eqns: https://www2.census.gov/programs-surveys/acs/tech_docs/accuracy/2020_ACS_Accuracy_Document_Worked_Examples.pdf
 
-# count of POC
-# = hw+(h-hw)+(nh-nhw)
-# = (est_total_hispanic + est_total_nhispanic - est_nhispanic_white)
-# = est_total_race - est_nhispanic_white
+# Exporting data sets ----------------------------------------------- 
 
-# SE(X +/- Y) -> eq 1 from ACS MOE eqns
-# SE(X/Y) -> eq 3 from ACS MOE eqns
-levels <- c("<=5%", "5%-10%", ">10%")
-z <- 1.645
-tract <- tract %>% mutate(count_notwhite = est_total_race - est_nhispanic_white,
-                          se_count_notwhite = sqrt((moe_total_race/z)^2 + 
-                                                   (moe_nhispanic_white/z)^2),
-                          moe_count_notwhite = se_count_notwhite * z,
-                          se_total_race = moe_total_race/z,
-                          se_prop_notwhite = 1/est_total_race * sqrt(se_count_notwhite^2 - (count_notwhite^2/est_total_race^2) * se_total_race^2),
-                          se_per_notwhite = se_prop_notwhite * 100,
-                          moe_per_notwhite = se_per_notwhite * z
-)
-tract <- tract %>% mutate(err_count_notwhite = moe_count_notwhite/count_notwhite,
-                          err_per_notwhite = moe_per_notwhite/per_notwhite)
-tract$err_count_notwhite_grp <- factor(ifelse(tract$err_count_notwhite <= 0.05, 
-                                             "<=5%",
-                                             ifelse(tract$err_count_notwhite > 0.05 & tract$err_count_notwhite <= 0.1, 
-                                                    "5%-10%",
-                                                    ">10%")), 
-                                      levels = levels)
-tract$err_per_notwhite_grp <- factor(ifelse(tract$err_per_notwhite <= 0.05, 
-                                           "<=5%",
-                                           ifelse(tract$err_per_notwhite > 0.05 & tract$err_per_notwhite <= 0.1, 
-                                                  "5%-10%",
-                                                  ">10%")), 
-                                    levels = levels)
-tract <- tract %>% select(-c(se_count_notwhite, se_total_race, se_prop_notwhite, se_per_notwhite))
-
-# Export datasets ----------------------------------------------- 
-
-# Final dataset for percentage by census tract, plus calculation components
-race <- race %>% select(-starts_with("moe"), -prop_notwhite)
+## Final data set for percentage by census tract, plus calculation components ----
+race <- race_calc %>% select(GEOID, starts_with("est"), per_notwhite)
 write_csv(race, file = "./data/01-People of Color/01_PeopleOfColor.csv")
 
-# Final dataset with tract information and MOE calculation
-write_rds(tract, "./data/01-People of Color/tract_01_PeopleOfColor.rds")
+## Final data set with tract information and MOE calculations ----
+write_rds(notwhite_moe_values, "./data/01-People of Color/tract_01_PeopleOfColor.rds")
+
+# To compare with 2021 update:
+# rds_2021 <- readRDS("Y:/VISION 2050/Data/Displacement/Displacement Index 2021/data/01-People of Color/tract_01_PeopleOfColor.rds")

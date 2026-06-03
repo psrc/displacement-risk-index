@@ -1,152 +1,117 @@
-# Generate indicator dataset ------------------------------------------------
+# Generate indicator data set
 
-# Libraries -----------------------------------------------
+# Libraries --------------------------------------
 # install.packages(tidyverse)
 # install.packages(tidycensus)
 library(tidyverse)
 library(tidycensus)
+library(psrccensus)
+library(sf)
 
 # Working directory
-setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2021")
+setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2026")
 
-# ACS key to access the survey data. Key can be obtained from: http://api.census.gov/data/key_signup.html 
-# Run once to add CENSUS API key to .Renviron file
-# census_api_key("16995506559e358a55d32e63541106a22b34acd7", install = TRUE)
-readRenviron("~/.Renviron")
+# The 2021 update (2019 ACS data) accessed the survey data using the API, which required a key (http://api.census.gov/data/key_signup.html), but since 2021, the psrccensus library was developed. The 2026 (2024 ACS data) update will access the survey data using psrccensus (https://psrc.github.io/psrccensus/articles/psrccensus.html).
+acs_data_year <- "2024"
 
-# Name of ACS databases
-v15 <- load_variables(2019, "acs5", cache = TRUE)
+# Accessing ACS data --------------------------------------
+# 5y estimates, by tract
+base_acs_data <- get_acs_recs(geography ='tract', 
+                              table.names = 'C16001', #subject table code
+                              years = c(as.numeric(acs_data_year)),
+                              acs.type = 'acs5')
 
-# Download data from ACS api
-# Rename variables
-# SPEAK LESS THAN VERY WELL TABLE C16001
-names <- c("total_>5","spanish_less", "cajun_less", "west_less", "slavic_less",
-           "euro_less", "kor_less", "mand_less", "viet_less", "tag_less", "asi_less", 
-           "arab_less", "other_less")
-number <-c("001", paste(ifelse(nchar(seq(5,38,by = 3)) == 1, "00", "0"), as.character(seq(5,38,by = 3)), sep = ""))
-database <- "C16001"
+## Transforming data ----
+# Define variables of interest (and order based on 2021 update data)
+variables_list <- c("C16001_001", #Estimate!!Total
+                    "C16001_005", #...!!Spanish:!!Speak English less than "very well"
+                    "C16001_008", #...!!French, Haitian, or Cajun:!!Speak English less than "very well"
+                    "C16001_011", #...!!German or other West Germanic languages:!!Speak English less than "very well"
+                    "C16001_014", #...!!Russian, Polish, or other Slavic languages:!!Speak English less than "very well"
+                    "C16001_017", #...!!Other Indo-European languages:!!Speak English less than "very well"
+                    "C16001_020", #...!!Korean:!!Speak English less than "very well"
+                    "C16001_023", #...!!Chinese (incl. Mandarin, Cantonese):!!Speak English less than "very well"
+                    "C16001_026", #...!!Vietnamese:!!Speak English less than "very well"
+                    "C16001_029", #...!!Tagalog (incl. Filipino):!!Speak English less than "very well"
+                    "C16001_032", #...!!Other Asian and Pacific Island languages:!!Speak English less than "very well"
+                    "C16001_035", #...!!Arabic:!!Speak English less than "very well"
+                    "C16001_038") #...!!Other and unspecified languages:!!Speak English less than "very well"
 
-for(i in 1:length(names)) {
-  
-  a <- paste("total", names[i], sep = "_")
-  assign(a, get_acs(geography = "tract", 
-                    variables = as.character(paste(database, number[i], sep = "_")), 
-                    year = 2019, 
-                    county = c("033","035","053","061"), 
-                    state = "53"))
-  b <- get(a)
-  colnames(b) <- c("GEOID", 
-                   "NAME", 
-                   "variable", 
-                   paste("est_total", names[i], sep = "_"), 
-                   paste("moe_total", names[i], sep = "_"))
-  b <- b[,c(-2, -3)]
-  assign(a, b)
-  rm(a,b)
-  
-}
 
-# Outer join of datasets
-language <- `total_total_>5` %>%
-  full_join(`total_spanish_less`, by = "GEOID") %>%
-  full_join(`total_cajun_less`, by = "GEOID") %>% 
-  full_join(`total_west_less`, by = "GEOID") %>% 
-  full_join(`total_slavic_less`, by = "GEOID") %>% 
-  full_join(`total_euro_less`, by = "GEOID") %>% 
-  full_join(`total_kor_less`, by = "GEOID") %>% 
-  full_join(`total_mand_less`, by = "GEOID") %>% 
-  full_join(`total_viet_less`, by = "GEOID") %>% 
-  full_join(`total_tag_less`, by = "GEOID") %>% 
-  full_join(`total_asi_less`, by = "GEOID") %>% 
-  full_join(`total_arab_less`, by = "GEOID") %>% 
-  full_join(`total_other_less`, by = "GEOID") 
+acs_data <- base_acs_data %>%
+  filter(variable %in% variables_list) %>% 
+  mutate(lang_cat = case_when(variable=="C16001_001"~"total_>5",
+                              variable=="C16001_005"~"total_spanish_less",
+                              variable=="C16001_008"~"total_cajun_less",
+                              variable=="C16001_011"~"total_west_less",
+                              variable=="C16001_014"~"total_slavic_less",
+                              variable=="C16001_017"~"total_euro_less",
+                              variable=="C16001_020"~"total_kor_less",
+                              variable=="C16001_023"~"total_mand_less",
+                              variable=="C16001_026"~"total_viet_less",
+                              variable=="C16001_029"~"total_tag_less",
+                              variable=="C16001_032"~"total_asi_less",
+                              variable=="C16001_035"~"total_arab_less",
+                              variable=="C16001_038"~"total_other_less")) %>% 
+  dplyr::select(GEOID, lang_cat, estimate, moe) %>% # simplify data set
+  rename(est=estimate) %>% # to match 2021 data
+  pivot_wider(names_from = lang_cat, 
+              values_from = c(est, moe)) # pivot data to facilitate calculations
 
-# Calculate percentage of population 5+ that speak English less than very well by tract
-language <- language %>% 
-   mutate(prop_noenglish = (`est_total_spanish_less` + `est_total_cajun_less` +
-                           `est_total_west_less` + `est_total_slavic_less` +
-                           `est_total_euro_less` + `est_total_kor_less` +
-                           `est_total_mand_less` + `est_total_viet_less` +
-                           `est_total_tag_less` + `est_total_asi_less` +
-                           `est_total_arab_less` + `est_total_other_less`) 
-                           / `est_total_total_>5`,
-          per_noenglish = prop_noenglish * 100)
 
-# Create spatial dataset with MOE calculation
-tract <- read_sf("Y:/VISION 2050/Data/Displacement/Displacement_Risk_Script/gis/tract2010_nowater.shp")
-tract <- tract %>%
-  mutate(GEOID = factor(GEOID10))
+## Calculate percentage of population 5+ that speak English less than very well by tract ----
+language_calc <- acs_data %>% 
+  rowwise() %>% 
+  mutate(sum_noenglish = sum(c_across(matches("^est.*less$")), na.rm = TRUE), # Sum columns starting with "est" and ending with "less"
+         prop_noenglish = sum_noenglish/`est_total_>5`,
+         per_noenglish = prop_noenglish * 100)
 
-# Project tracts
-tract <- st_transform(tract, 4269)
 
-# Join datasets  ----------------------------------------------- 
-tract <- tract %>%
-  left_join(language %>%
-              mutate(GEOID = factor(GEOID), 
-                     county = factor(str_sub(GEOID, 1, 5))), by = ("GEOID")) 
+# Creating spatial data set --------------------------------------
+
+## Calculating reliability measures for ACS estimates ----
+# old method (2021 update): manual calculations using SE and z-score of 1.645
+# new method (2026 update): using moe_sum() and moe_prop() from the tidycensus library (https://psrc.github.io/psrccensus/articles/calculate-reliability-moe-transformed-acs.html)
+
+# use the moe_sum function from tidycensus: moe_sum(moe, estimate = NULL, na.rm = FALSE)
+# use the moe_prop function from tidycensus: moe_prop(num, denom, moe_num, moe_denom)
+language_moe_values <- language_calc %>%
+  mutate(
+    est_total_noenglish = rowSums(across(matches("^est.*less$")), na.rm = TRUE), #same as sum_noenglish
+    moe_total_noenglish = moe_sum(estimate=across(matches("^est.*less$")),
+                                  moe=across(matches("^moe.*less$")))) %>% 
+  mutate(
+    moe_prop_noenglish = moe_prop(num=est_total_noenglish,
+                                  denom=`est_total_>5`, 
+                                  moe_num=moe_total_noenglish, 
+                                  moe_denom=`moe_total_>5`)) %>%
+  reliability_calcs(estimate='prop_noenglish', 
+                    moe='moe_prop_noenglish')
+
+
+# Connecting to ElmerGeo for census geographies through Portal, instead of saving spatial file to the project folder
+arc_service <- "https://services6.arcgis.com/GWxg6t7KXELn1thE/arcgis/rest/services"
+tracts20.url <- file.path(arc_service, "Census_Tracts_2020/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson")
+tract <- st_read(tracts20.url)
+
+
+## Joining spatial and tabular data by tract ----
+tract <- merge(tract, language_moe_values,
+               by.x="geoid20",
+               by.y="GEOID",
+               all.x=TRUE)
 
 tract$per_noenglish <- round(tract$per_noenglish, digits = 2)
 
-# margin of error for
-# 1. count of linguistically isolated per tract
-# 2. proportion of linguistically isolated by tract
-# ACS MOE eqns: https://www2.census.gov/programs-surveys/acs/tech_docs/accuracy/2020_ACS_Accuracy_Document_Worked_Examples.pdf
 
-# count of linguistically isolated
-# = spn + frn + ger + rus + eur + kor + chn + vnm + tag + asn + arb + oth
-# = est_total_spanish_less + est_total_cajun_less +
-#   est_total_west_less + est_total_slavic_less +
-#   est_total_euro_less + est_total_kor_less +
-#   est_total_mand_less + est_total_viet_less +
-#   est_total_tag_less + est_total_asi_less +
-#   est_total_arab_less + est_total_other_less
+# Exporting data sets ----------------------------------------------- 
 
-# SE(X +/- Y) -> eq 1 from ACS MOE eqns
-# SE(X/Y) -> eq 3 from ACS MOE eqns
-levels <- c("<=5%", "5%-10%", ">10%")
-z <- 1.645
-tract <- tract %>% mutate(count_noenglish = est_total_spanish_less + est_total_cajun_less +
-                          est_total_west_less + est_total_slavic_less +
-                          est_total_euro_less + est_total_kor_less +
-                          est_total_mand_less + est_total_viet_less +
-                          est_total_tag_less + est_total_asi_less +
-                          est_total_arab_less + est_total_other_less,
-                        se_count_noenglish = sqrt(
-                          (moe_total_spanish_less/z)^2 + (moe_total_cajun_less/z)^2 +
-                            (moe_total_west_less/z)^2 + (moe_total_slavic_less/z)^2 +
-                            (moe_total_euro_less/z)^2 + (moe_total_kor_less/z)^2 +
-                            (moe_total_mand_less/z)^2 + (moe_total_viet_less/z)^2 +
-                            (moe_total_tag_less/z)^2 + (moe_total_asi_less/z)^2 +
-                            (moe_total_arab_less/z)^2 + (moe_total_other_less/z)^2),
-                        moe_count_noenglish = se_count_noenglish * z,
-                        `se_total_total_>5` = `moe_total_total_>5`/z,
-                        se_prop_noenglish = 1/`est_total_total_>5` * sqrt(se_count_noenglish^2 - (count_noenglish^2/`est_total_total_>5`^2) * `se_total_total_>5`^2),
-                        se_per_noenglish = se_prop_noenglish * 100,
-                        moe_per_noenglish = se_per_noenglish * z
-)
-tract <- tract %>% mutate(err_count_noenglish = moe_count_noenglish/count_noenglish,
-                        err_per_noenglish = moe_per_noenglish/per_noenglish)
-tract$err_count_noenglish_grp <- factor(ifelse(tract$err_count_noenglish <= 0.05, 
-                                              "<=5%",
-                                              ifelse(tract$err_count_noenglish > 0.05 & tract$err_count_noenglish <= 0.1, 
-                                                     "5%-10%",
-                                                     ">10%")), 
-                                       levels = levels)
-tract$err_per_noenglish_grp <- factor(ifelse(tract$err_per_noenglish <= 0.05, 
-                                            "<=5%",
-                                            ifelse(tract$err_per_noenglish > 0.05 & tract$err_per_noenglish <= 0.1, 
-                                                   "5%-10%",
-                                                   ">10%")), 
-                                     levels = levels)
-tract <- tract %>% select(-c(se_count_noenglish, `se_total_total_>5`, se_prop_noenglish, se_per_noenglish))
-
-# Export datasets ----------------------------------------------- 
-
-# Final dataset for percentage by census tract, plus calculation components
-language <- language %>% select(-starts_with("moe"), -prop_noenglish)
+## Final data set for percentage by census tract, plus calculation components ----
+language <- language_calc %>% select(GEOID, starts_with("est"), per_noenglish)
 write_csv(language, file = "./data/02-Linguistic Isolation/02_LinguisticIsolation.csv")
 
-# Final dataset with tract information and MOE calculation
+## Final data set with tract information and MOE calculations ----
 write_rds(tract, "./data/02-Linguistic Isolation/tract_02_LinguisticIsolation.rds")
 
+# To compare with 2021 update:
+# rds_2021 <- readRDS("Y:/VISION 2050/Data/Displacement/Displacement Index 2021/data/02-Linguistic Isolation/tract_02_LinguisticIsolation.rds")

@@ -1,15 +1,205 @@
-# Generate indicator dataset ------------------------------------------------
+# Generate indicator data set
 
-# Libraries -----------------------------------------------
-# install.packages("tidyverse")
-# install.packages("tidycensus")
-# install.packages("sf")
+# Libraries --------------------------------------
+# install.packages(tidyverse)
+# install.packages(tidycensus)
 library(tidyverse)
 library(tidycensus)
+library(psrccensus)
 library(sf)
 
 # Working directory
-setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2021/")
+setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2026")
+
+# The 2021 update (2019 ACS data) accessed the survey data using the API, which required a key (http://api.census.gov/data/key_signup.html), but since 2021, the psrccensus library was developed. The 2026 (2024 ACS data) update will access the survey data using psrccensus (https://psrc.github.io/psrccensus/articles/psrccensus.html).
+acs_data_year <- "2024"
+
+# Accessing ACS data --------------------------------------
+# 5y estimates, by tract
+base_acs_data_tract <- get_acs_recs(geography ='tract', 
+                                    table.names = 'B25031', #Median Gross Rent by Bedrooms
+                                    years = c(as.numeric(acs_data_year)),
+                                    acs.type = 'acs5')
+# 5y estimates, by tract
+base_acs_data_county <- get_acs_recs(geography ='county', 
+                                     table.names = 'B25031', #Median Gross Rent by Bedrooms
+                                     years = c(as.numeric(acs_data_year)),
+                                     acs.type = 'acs5')
+
+## Transforming data ----
+# Define variables of interest (and order based on 2021 update data)
+variables_list <- c("B25031_001", #Estimate!!Median gross rent --!!Total
+                    "B25031_002", #Estimate!!Median gross rent --!!Total:!!No bedroom
+                    "B25031_003", #Estimate!!Median gross rent --!!Total:!!1 bedroom
+                    "B25031_004", #Estimate!!Median gross rent --!!Total:!!2 bedrooms
+                    "B25031_005", #Estimate!!Median gross rent --!!Total:!!3 bedrooms
+                    "B25031_006", #Estimate!!Median gross rent --!!Total:!!4 bedrooms
+                    "B25031_007") #Estimate!!Median gross rent --!!Total:!!5 or more bedrooms
+
+# Tract-level data
+acs_data_tract <- base_acs_data_tract %>%
+  mutate(medrent_cat = case_when(variable=="B25031_001"~"tract_median_rent",
+                                 variable=="B25031_002"~"tract_0_rooms",
+                                 variable=="B25031_003"~"tract_1_rooms",
+                                 variable=="B25031_004"~"tract_2_rooms",
+                                 variable=="B25031_005"~"tract_3_rooms",
+                                 variable=="B25031_006"~"tract_4_rooms",
+                                 variable=="B25031_007"~"tract_5_rooms")) %>% 
+  dplyr::select(GEOID, county, medrent_cat, estimate, moe) %>% # simplify data set
+  rename(est_total=estimate) %>% # to match 2021 data
+  pivot_wider(names_from = medrent_cat,
+              values_from = c(est_total, moe)) %>% # pivot data to facilitate calculations
+  mutate(across(where(is.numeric), # select only numeric columns
+                ~ na_if(., 0))) # replace 0 with NA - 0 median rent is misleading when there's no data
+  
+
+# County-level data
+acs_data_county <- base_acs_data_county %>%
+  mutate(medrent_cat = case_when(variable=="B25031_001"~"cty_median_rent",
+                                 variable=="B25031_002"~"cty_0_rooms",
+                                 variable=="B25031_003"~"cty_1_rooms",
+                                 variable=="B25031_004"~"cty_2_rooms",
+                                 variable=="B25031_005"~"cty_3_rooms",
+                                 variable=="B25031_006"~"cty_4_rooms",
+                                 variable=="B25031_007"~"cty_5_rooms")) %>% 
+  dplyr::select(GEOID, name, medrent_cat, estimate, moe) %>% # simplify data set
+  rename(est_total=estimate,
+         county=name,
+         GEOID_cty=GEOID) %>% # to match 2021 data
+  filter(county!="Region") %>% 
+  pivot_wider(names_from = medrent_cat,
+              values_from = c(est_total, moe)) # pivot data to facilitate calculations
+
+# merge tract and county data
+acs_data <- acs_data_tract %>% 
+  left_join(acs_data_county,
+            by="county")
+
+## Calculate ratio of median rent by bedrooms to the regional median, or each county's median by census tract ----
+median_rent_calc <- acs_data %>%
+  mutate(ind_rent = est_total_tract_median_rent / est_total_cty_median_rent,
+         ind_rent_0_rooms = est_total_tract_0_rooms / est_total_cty_0_rooms,
+         ind_rent_1_rooms = est_total_tract_1_rooms / est_total_cty_1_rooms,
+         ind_rent_2_rooms = est_total_tract_2_rooms / est_total_cty_2_rooms,
+         ind_rent_3_rooms = est_total_tract_3_rooms / est_total_cty_3_rooms,
+         ind_rent_4_rooms = est_total_tract_4_rooms / est_total_cty_4_rooms,
+         ind_rent_5_rooms = est_total_tract_5_rooms / est_total_cty_5_rooms)
+
+
+# Creating spatial data set --------------------------------------
+
+## Calculating reliability measures for ACS estimates ----
+# old method (2021 update): unlike the other indicators MOEs were not calculated for this indicator
+# new method (2026 update): using moe_prop() from the tidycensus library (https://psrc.github.io/psrccensus/articles/calculate-reliability-moe-transformed-acs.html)
+
+# use the moe_prop function from tidycensus: moe_prop(num, denom, moe_num, moe_denom)
+median_rent_moe_values <- median_rent_calc %>%
+  # rowwise() %>%
+  mutate(moe_prop_medrent=moe_prop(num=est_total_tract_median_rent,
+                                   denom=est_total_cty_median_rent, 
+                                   moe_num=moe_tract_median_rent, 
+                                   moe_denom=est_total_cty_median_rent)) %>% 
+  reliability_calcs(estimate='ind_rent', 
+                    moe='moe_prop_medrent') %>% 
+  rename(se_medrent=se,
+         cv_medrent=cv,
+         reliability_medrent=reliability) %>% 
+  # 0 rooms
+  mutate(moe_prop_medrent_0_rooms=moe_prop(num=est_total_tract_0_rooms,
+                                           denom=est_total_cty_0_rooms, 
+                                           moe_num=moe_tract_0_rooms, 
+                                           moe_denom=moe_cty_0_rooms)) %>% 
+  reliability_calcs(estimate='ind_rent_0_rooms', 
+                    moe='moe_prop_medrent_0_rooms') %>% 
+  rename(se_0_rooms=se,
+         cv_0_rooms=cv,
+         reliability_0_rooms=reliability) %>%
+  # 1 room
+  mutate(moe_prop_medrent_1_rooms=moe_prop(num=est_total_tract_1_rooms,
+                                           denom=est_total_cty_1_rooms, 
+                                           moe_num=moe_tract_1_rooms, 
+                                           moe_denom=moe_cty_1_rooms)) %>% 
+  reliability_calcs(estimate='ind_rent_1_rooms', 
+                    moe='moe_prop_medrent_1_rooms') %>% 
+  rename(se_1_rooms=se,
+         cv_1_rooms=cv,
+         reliability_1_rooms=reliability) %>%
+  # 2 rooms
+  mutate(moe_prop_medrent_2_rooms=moe_prop(num=est_total_tract_2_rooms,
+                                           denom=est_total_cty_2_rooms, 
+                                           moe_num=moe_tract_2_rooms, 
+                                           moe_denom=moe_cty_2_rooms)) %>% 
+  reliability_calcs(estimate='ind_rent_2_rooms', 
+                    moe='moe_prop_medrent_2_rooms') %>% 
+  rename(se_2_rooms=se,
+         cv_2_rooms=cv,
+         reliability_2_rooms=reliability) %>%
+  # 3 rooms
+  mutate(moe_prop_medrent_3_rooms=moe_prop(num=est_total_tract_3_rooms,
+                                           denom=est_total_cty_3_rooms, 
+                                           moe_num=moe_tract_3_rooms, 
+                                           moe_denom=moe_cty_3_rooms)) %>% 
+  reliability_calcs(estimate='ind_rent_3_rooms', 
+                    moe='moe_prop_medrent_3_rooms') %>% 
+  rename(se_3_rooms=se,
+         cv_3_rooms=cv,
+         reliability_3_rooms=reliability) %>%
+  # 4 rooms
+  mutate(moe_prop_medrent_4_rooms=moe_prop(num=est_total_tract_4_rooms,
+                                           denom=est_total_cty_4_rooms, 
+                                           moe_num=moe_tract_4_rooms, 
+                                           moe_denom=moe_cty_4_rooms)) %>% 
+  reliability_calcs(estimate='ind_rent_4_rooms', 
+                    moe='moe_prop_medrent_4_rooms') %>% 
+  rename(se_4_rooms=se,
+         cv_4_rooms=cv,
+         reliability_4_rooms=reliability) %>%
+  # 5 rooms
+  mutate(moe_prop_medrent_5_rooms=moe_prop(num=est_total_tract_5_rooms,
+                                           denom=est_total_cty_5_rooms, 
+                                           moe_num=moe_tract_5_rooms, 
+                                           moe_denom=moe_cty_5_rooms)) %>% 
+  reliability_calcs(estimate='ind_rent_5_rooms', 
+                    moe='moe_prop_medrent_5_rooms') %>% 
+  rename(se_5_rooms=se,
+         cv_5_rooms=cv,
+         reliability_5_rooms=reliability)
+
+
+
+# Connecting to ElmerGeo for census geographies through Portal, instead of saving spatial file to the project folder
+arc_service <- "https://services6.arcgis.com/GWxg6t7KXELn1thE/arcgis/rest/services"
+tracts20.url <- file.path(arc_service, "Census_Tracts_2020/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson")
+tract <- st_read(tracts20.url)
+
+
+## Joining spatial and tabular data by tract ----
+tract <- merge(tract, median_rent_moe_values,
+               by.x="geoid20",
+               by.y="GEOID",
+               all.x=TRUE)
+
+# tract <- tract %>% 
+#   mutate(across(starts_with("ind"), ~ round(.x, 2)))
+
+
+# Exporting data sets ----------------------------------------------- 
+
+## Final data set for percentage by census tract, plus calculation components ----
+median_rent <- median_rent_calc %>% select(GEOID, starts_with("est"), starts_with("ind"))
+write_csv(median_rent, file = "./data/14-Median Rent/14_MedianRent.csv")
+
+## Final data set with tract information and MOE calculations ----
+write_rds(tract, "./data/14-Median Rent/tract_14_MedianRent.rds") 
+
+# To compare with 2021 update:
+# rds_2021 <- readRDS("Y:/VISION 2050/Data/Displacement/Displacement Index 2021/data/14-Median Rent/tract_14_MedianRent.rds")
+
+
+
+
+
+
 
 # ACS key to access the survey data. Key can be obtained from: http://api.census.gov/data/key_signup.html 
 # Run once to add CENSUS API key to .Renviron file
