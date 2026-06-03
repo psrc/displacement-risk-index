@@ -15,11 +15,36 @@ out_file = 'tract_dist_amenity.csv'
 amenity_types = ['supermarket','pharmacy', 'restaurant']
 
 
+def _coerce_int_id(series: pd.Series, *, name: str) -> pd.Series:
+    """Coerce an ID column to pandas nullable Int64.
+
+    Many of the upstream CSVs store IDs as floats like 3584.0.
+    """
+    numeric = pd.to_numeric(series, errors='coerce')
+    non_null = numeric.dropna()
+    if not non_null.empty:
+        # Guard against unexpected fractional IDs.
+        if ((non_null % 1) != 0).any():
+            bad = non_null[((non_null % 1) != 0)].head(5).tolist()
+            raise ValueError(f"Column '{name}' contains non-integer values (sample: {bad})")
+    return numeric.round().astype('Int64')
 
 
-def get_tract_distances(zones_distances,tract):
-    zone_dist_tract = pd.merge(zones_distances, tract, left_on = 'ZoneID', right_on = 'TAZ')
-    g= zone_dist_tract.groupby('GEOID10')
+def _pick_tract_join_column(tract: pd.DataFrame) -> str:
+    """Pick the tract-to-zone join column from common historical names."""
+    for col in ('TAZ', 'taz_p', 'taz', 'TAZ_P', 'taz_id', 'TAZID'):
+        if col in tract.columns:
+            return col
+    raise ValueError(
+        "Tract-zone CSV is missing a join key. Expected one of: "
+        "TAZ, taz_p, taz, TAZ_P, taz_id, TAZID"
+    )
+
+
+
+def get_tract_distances(zones_distances, tract, *, tract_join_col: str):
+    zone_dist_tract = pd.merge(zones_distances, tract, left_on='ZoneID', right_on=tract_join_col)
+    g= zone_dist_tract.groupby('GEOID')
     # have to also take care of if there is weird missing data (hh_p)
     def weighted_avg(x):
         weights = pd.to_numeric(x.get('hh_p'), errors='coerce').fillna(0)
@@ -50,7 +75,12 @@ def get_tract_distances(zones_distances,tract):
             ordered_cols.append(f"{amenity}_n")
         return pd.Series(out, index=ordered_cols)
 
-    tract_distances = g.apply(weighted_avg)
+    try:
+        # pandas >= 2.2: avoid FutureWarning about grouping columns.
+        tract_distances = g.apply(weighted_avg, include_groups=False)
+    except TypeError:
+        # Older pandas: include_groups not supported.
+        tract_distances = g.apply(weighted_avg)
 
     return tract_distances
 
@@ -96,6 +126,7 @@ def _read_zone_distances_csv(amenity: str) -> pd.DataFrame:
                 )
 
             out = df[['ZoneID', distance_col]].copy()
+            out['ZoneID'] = _coerce_int_id(out['ZoneID'], name='ZoneID')
             out.rename(columns={distance_col: amenity}, inplace=True)
             return out
 
@@ -104,8 +135,17 @@ def _read_zone_distances_csv(amenity: str) -> pd.DataFrame:
     )
 
 def main():
-    
-    tracts = pd.read_csv(os.path.join(working_dir, tract_zone_file))
+
+    tracts_path = os.path.join(working_dir, tract_zone_file)
+    tracts = pd.read_csv(tracts_path, dtype={'GEOID': str})
+    if 'GEOID' not in tracts.columns:
+        raise ValueError(f"{tract_zone_file} is missing required column 'GEOID'")
+
+    tract_join_col = _pick_tract_join_column(tracts)
+    tracts[tract_join_col] = _coerce_int_id(tracts[tract_join_col], name=tract_join_col)
+
+    # Standardize merge key type.
+    tracts = tracts[tracts[tract_join_col].notna()].copy()
     first_amenity = True
     zones_distances_df = None
 
@@ -123,13 +163,15 @@ def main():
 
     if zones_distances_df is None:
         raise ValueError("No amenity types configured; nothing to aggregate.")
+
+    zones_distances_df = zones_distances_df[zones_distances_df['ZoneID'].notna()].copy()
     
     # Ensure -1/negative sentinel values are treated as missing before aggregation.
     for amenity in amenity_types:
         zones_distances_df[amenity] = pd.to_numeric(zones_distances_df[amenity], errors='coerce')
         zones_distances_df.loc[zones_distances_df[amenity] < 0, amenity] = np.nan
 
-    tract_distances = get_tract_distances(zones_distances_df,tracts)
+    tract_distances = get_tract_distances(zones_distances_df, tracts, tract_join_col=tract_join_col)
     tract_distances.to_csv(os.path.join(working_dir, out_file))
 
 if __name__ == "__main__":
