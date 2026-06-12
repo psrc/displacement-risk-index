@@ -1,6 +1,10 @@
 [crs]
 projected = "EPSG:2285"
 
+[year]
+tract = "tract2020_nowater"
+geoid = "geoid20"
+
 [buffer]
 quarter_mile_feet = 1320.0
 half_mile_feet = 2640.0
