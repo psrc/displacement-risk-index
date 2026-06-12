@@ -25,6 +25,8 @@ CONFIG = load_config(CONFIG_PATH)
 CRS_PROJECTED = CONFIG["crs"]["projected"]
 BUFFER_QUARTER_MILE_FEET = float(CONFIG["buffer"]["quarter_mile_feet"])
 BUFFER_HALF_MILE_FEET = float(CONFIG["buffer"]["half_mile_feet"])
+CENSUS_TRACTS_LAYER = CONFIG["year"]["tract"]
+GEOID = CONFIG["year"]["geoid"]
 
 TRANSIT_STOPS_CSV = Path(CONFIG["paths"]["transit_stops_csv"])
 OUTPUT_DIR = Path(CONFIG["paths"]["output_dir"])
@@ -71,7 +73,7 @@ def build_station_geodataframes(
 
 def load_tracts_nowater() -> gpd.GeoDataFrame:
     eg_conn = psrcelmerpy.ElmerGeoConn()
-    tracts = eg_conn.read_geolayer("tract2020_nowater")
+    tracts = eg_conn.read_geolayer(CENSUS_TRACTS_LAYER)
     return tracts.to_crs(CRS_PROJECTED)
 
 
@@ -106,9 +108,9 @@ def calculate_area_coverage(
     tracts = tracts_nowater.copy()
     tracts["total_area"] = tracts.geometry.area
 
-    result = tracts[["geoid20", "total_area"]].merge(
-        area_gdf[["geoid20", "quarter_mile_hct_sq_ft"]],
-        on="geoid20",
+    result = tracts[[GEOID, "total_area"]].merge(
+        area_gdf[[GEOID, "quarter_mile_hct_sq_ft"]],
+        on=GEOID,
         how="left",
     )
 
