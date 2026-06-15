@@ -14,5 +14,4 @@ transit_stops_csv = 'R:\e2projects_two\SoundCast\Inputs\rtp_2026_2050\networks\2
 output_dir = 'Y:\VISION 2050\Data\Displacement\Displacement Index 2026\data\09-Proximity to Current or Future hct'
 
 [output_files]
-tract_nowater_csv = "tract2020_gdf_nowater_2023.csv"
 area_coverage_csv = "09_futureProximityToTransit.csv"
