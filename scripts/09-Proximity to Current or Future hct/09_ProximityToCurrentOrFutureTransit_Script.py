@@ -30,7 +30,6 @@ GEOID = CONFIG["year"]["geoid"]
 
 TRANSIT_STOPS_CSV = Path(CONFIG["paths"]["transit_stops_csv"])
 OUTPUT_DIR = Path(CONFIG["paths"]["output_dir"])
-TRACT_NOWATER_EXPORT_CSV = OUTPUT_DIR / CONFIG["output_files"]["tract_nowater_csv"]
 AREA_COVERAGE_EXPORT_CSV = OUTPUT_DIR / CONFIG["output_files"]["area_coverage_csv"]
 
 
@@ -136,14 +135,12 @@ def main() -> None:
     gdf_hct_05, gdf_hct_025 = build_station_geodataframes(df_hct_05, df_hct_025)
 
     tracts_nowater = load_tracts_nowater()
-    tracts_nowater.to_csv(TRACT_NOWATER_EXPORT_CSV, index=False)
 
     combined_hct_buffer = build_combined_hct_buffer(gdf_hct_05, gdf_hct_025)
 
     result = calculate_area_coverage(tracts_nowater, combined_hct_buffer)
     result.to_csv(AREA_COVERAGE_EXPORT_CSV, index=False)
 
-    print(f"Saved: {TRACT_NOWATER_EXPORT_CSV}")
     print(f"Saved: {AREA_COVERAGE_EXPORT_CSV}")
 
 
