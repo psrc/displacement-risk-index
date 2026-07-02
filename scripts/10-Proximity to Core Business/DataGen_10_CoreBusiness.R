@@ -13,10 +13,19 @@ library(sf)
 # Working directory
 setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2026")
 
-# Load data set -------------------------------------- 
-# 2023 base year
-future_prox <- read.csv("./data/09-Proximity to Current or Future hct/09_futureProximityToTransit.csv")
 
+# Load data set -------------------------------------- 
+business <- read.csv("./data/10-Proximity to Core Business/tract_dist_amenity.csv")
+
+# Separate out the different business types
+str(business)
+
+supermarket <- business %>% 
+  select(GEOID, supermarket)
+pharmacy <- business %>% 
+  select(GEOID, pharmacy)
+restaurant <- business %>% 
+  select(GEOID, restaurant)
 
 # Creating spatial data set --------------------------------------
 # Connecting to ElmerGeo for census geographies through Portal, instead of saving spatial file to the project folder
@@ -26,19 +35,15 @@ tract <- st_read(tracts20.url)
 
 
 ## Joining spatial and tabular data by tract ----
-tract <- merge(tract, future_prox,
-               by="geoid20",
+tract <- merge(tract, business,
+               by.x="geoid20", by.y="GEOID",
                all.x=TRUE)
 
-tract$percent_hct <- tract$percent_hct*100
-
-
 # Exporting data sets ----------------------------------------------- 
-## Final data set for distance by census tract, plus calculation components ----
-# the csv requires no additional calculations 
+## Final data set for distance by census tract ----
+write_csv(supermarket, file = "./data/10-Proximity to Core Business/10_a_ProximityCoreBusinessSupermarket.csv")
+write_csv(pharmacy, file = "./data/10-Proximity to Core Business/10_b_ProximityCoreBusinessPharmacy.csv")
+write_csv(restaurant, file = "./data/10-Proximity to Core Business/10_c_ProximityCoreBusinessRestaurant.csv")
 
 ## Final data set with tract information ----
-write_rds(tract, "./data/09-Proximity to Current or Future hct/tract_09_futureProximityToTransit.rds")
-
-# To compare with 2021 update:
-# rds_2021 <- readRDS("Y:/VISION 2050/Data/Displacement/Displacement Index 2021/data/09-Proximity to Current or Future hct/tract_09_futureProximityToTransit.rds")
+write_rds(tract, "./data/10-Proximity to Core Business/tract_10_CoreBusinness.rds")

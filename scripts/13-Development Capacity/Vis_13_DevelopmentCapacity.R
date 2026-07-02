@@ -1,40 +1,96 @@
-# 13 - Development Capacity
+### Descriptive and spatial analysis of the data ------------------------------------------------
 
-# Descriptive and spatial analysis of the data ------------------------------------------------
-# 2014 base year vs 2018 base year
-
-# Libraries -----------------------------------------------
-# install.packages("tidyverse")
+# Libraries
+# install.packages('tidyverse')
+# install.packages("tidycensus")
 # install.packages("sf")
-# install.packages("leaflet")
+# install.packages("leaflet") 
 # install.packages("wesanderson")
-# install.packages("tigris")
 library(tidyverse)
+library(tidycensus)
 library(sf)
 library(leaflet)
 library(wesanderson)
-library(tigris)
 
 # Working directory
-setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2021")
+setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2026")
+
+# Access to jobs by transit data  -----------------------------------------------
+# Current data
+devcap <- read.csv("./data/13-Development Capacity/013_DevelopmentCapacity.csv")
+
+# 2014 BY data
+devcap_2014_old <- read.csv("../Displacement_Risk_Script/data/013_DevelopmentCapacity.csv")
+
+# 2014 BY data (updated method)
+devcap_2014 <- read.csv("../Displacement Index 2021/data/13-Development Capacity/2014by_upd_meth/hh_at_displacement_risk-BY2014-2021-12-13.csv")
+
+# 2018 BY data (updated method)
+devcap_2018 <- read.csv("../Displacement Index 2021/data/13-Development Capacity/2018by_upd_meth/hh_at_displacement_risk-2021-11-29/hh_at_displacement_risk-2021-11-29.csv")
+
+# Calculate quantiles
+temp = as.data.frame(quantile(devcap$per_at_risk_2023by, probs = seq(0, 1, 0.2),na.rm = TRUE))
+# temp$new = unlist(temp$`quantile(devcap$per_at_risk_2023by, probs = seq(0, 1, 0.2), na.rm = TRUE)`)
+colnames(temp) <- "new"
+
+# Variable distributions
+devcap %>%  ggplot(aes(per_at_risk_2023by)) +
+  geom_histogram(fill="royalblue3") +
+  xlab("Percent (%)") + 
+  ggtitle("Distribution of residential development potential") +
+  geom_vline(aes(xintercept = quantile(per_at_risk_2023by, 0.2, na.rm = TRUE), color = "Quintiles")) +
+  geom_vline(xintercept = temp$new, colour="black") +
+  geom_vline(aes(xintercept = mean(per_at_risk_2023by, na.rm = TRUE), color = "Mean")) +
+  geom_vline(aes(xintercept = median(per_at_risk_2023by, na.rm = TRUE), color = "Median")) +
+  scale_color_manual(name = "Statistics", 
+                     values = c("Quintiles" = "black", "Mean" = "red", "Median" = "orange"))
+
+# Compare 2014, 2018, and 2023 distributions
+mean_devcap_2014 = mean(devcap_2014$NumJobsTransit,na.rm = TRUE)
+mean_devcap_2018 = mean(devcap_2018$per_at_risk_2018by,na.rm = TRUE)
+mean_devcap_2023 = mean(devcap$per_at_risk_2023by,na.rm = TRUE)
+
+# Bind data sets
+devcap_2014$year = as.factor(2014)
+devcap_2018$year = as.factor(2018)
+devcap$year = as.factor(2023)
+
+devcap_all <- rbind(devcap_2014, devcap_2018, devcap_2014)
+
+devcap_all %>% ggplot(aes(NumJobsTransit,fill = year))+
+  geom_density(alpha=.2)
+
+devcap_all %>% ggplot(aes(NumJobsTransit, fill = year))+
+  geom_density(alpha=.2)+
+  geom_vline(aes(xintercept=mean_devcap_2014),
+             color="salmon", linetype="dashed", linewidth=1)+
+  geom_vline(aes(xintercept=mean_devcap_2018),
+             color="cadetblue", linetype="dashed", linewidth=1)+
+  geom_vline(aes(xintercept=mean_devcap_2023),
+             color="royalblue", linetype="dashed", linewidth=1)
+
+
+
+
+
 
 # Development capacity data  ----------------------------------------------- 
 data <- read_csv("./data/13-Development Capacity/13_DevelopmentCapacity.csv")
 
 # Calculate quantiles
-temp = as.data.frame(quantile(data$per_at_risk_2018by, probs = seq(0, 1, 0.2),na.rm = TRUE))
+temp = as.data.frame(quantile(data$per_at_risk_2023by, probs = seq(0, 1, 0.2),na.rm = TRUE))
 # temp$new = unlist(temp$`quantile(data$per_at_risk_2018by, probs = seq(0, 1, 0.2), na.rm = TRUE)`)
 colnames(temp) <- "new"
 
 # Variable distributions
-data %>% ggplot(aes(per_at_risk_2018by)) +
+data %>% ggplot(aes(per_at_risk_2023by)) +
   geom_histogram(fill="royalblue3") +
   xlab("Percent (%)") + 
   ggtitle("Distribution of residential development potential") +
-  geom_vline(aes(xintercept = quantile(per_at_risk_2018by, 0.2, na.rm = TRUE), color = "Quintiles")) +
+  geom_vline(aes(xintercept = quantile(per_at_risk_2023by, 0.2, na.rm = TRUE), color = "Quintiles")) +
   geom_vline(xintercept = temp$new, colour="black") +
-  geom_vline(aes(xintercept = mean(per_at_risk_2018by, na.rm = TRUE), color = "Mean")) +
-  geom_vline(aes(xintercept = median(per_at_risk_2018by, na.rm = TRUE), color = "Median")) +
+  geom_vline(aes(xintercept = mean(per_at_risk_2023by, na.rm = TRUE), color = "Mean")) +
+  geom_vline(aes(xintercept = median(per_at_risk_2023by, na.rm = TRUE), color = "Median")) +
   scale_color_manual(name = "Statistics", 
                      values = c("Quintiles" = "black", "Mean" = "red", "Median" = "orange"))
 

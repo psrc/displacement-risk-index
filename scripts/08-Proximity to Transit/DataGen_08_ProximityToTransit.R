@@ -1,19 +1,20 @@
 # Generate indicator data set
-# Percent of population within ? mile to frequent or high capacity transit
 
 # Libraries --------------------------------------
-# install.packages("tidyverse")
-# install.packages("tidycensus")
+# install.packages(tidyverse)
+# install.packages(tidycensus)
 library(tidyverse)
 library(tidycensus)
+library(readxl) #read_excel()
 library(psrccensus)
+library(psrcelmer) # access Elmer CHAS data
 library(sf)
 
 # Working directory
-setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2026") 
+setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2026")
 
 
-# Load data set ----------------------------------------------- 
+# Load data set -------------------------------------- 
 # 2023 base year
 ptt_2023 <- read.csv("./data/08-Proximity to Transit/08_proximityToTransit.csv")
 
@@ -29,7 +30,7 @@ tract <- merge(tract, ptt_2023,
                by="geoid20",
                all.x=TRUE)
 
-tract$percent_pop_quarter_mile <- round(tract$percent_pop_quarter_mile, digits = 3)
+tract$percent_prox_transit <- tract$percent_pop_quarter_mile*100
 
 # Exporting data sets ----------------------------------------------- 
 ## Final data set for distance by census tract, plus calculation components ----

@@ -16,15 +16,9 @@ library(wesanderson)
 setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2026")
 
 # Current data
-# In the 2021 update, the data were in three separate csv files, but for the 2026 update, the data are combined in one csv, with a column for each business type. 
-all_data <- read_csv("./data/10-Proximity to Core Business/tract_dist_amenity.csv")
-
-supermarket_data <- all_data %>% 
-  select(GEOID, supermarket)
-pharmacy_data <- all_data %>% 
-  select(GEOID, pharmacy)
-restaurant_data <- all_data %>% 
-  select(GEOID, restaurant)
+supermarket_data <- read_csv("./data/10-Proximity to Core Business/10_a_ProximityCoreBusinessSupermarket.csv")
+pharmacy_data <- read_csv("./data/10-Proximity to Core Business/10_b_ProximityCoreBusinessPharmacy.csv")
+restaurant_data <- read_csv("./data/10-Proximity to Core Business/10_c_ProximityCoreBusinessRestaurant.csv")
 
 # 2018 data
 all_data_2018 <- read.csv("../Displacement_Risk_Script/data/010_ProximityCoreBusiness.csv")

@@ -1,20 +1,62 @@
-# 13 - Development Capacity
-# Generate indicator dataset ------------------------------------------------
+# Generate indicator data set
 
-# Libraries -----------------------------------------------
-# install.packages("tidyverse")
-# install.packages("sf")
-# install.packages("leaflet")
-# install.packages("wesanderson")
-# install.packages("tigris")
+# Libraries --------------------------------------
+# install.packages(tidyverse)
+# install.packages(tidycensus)
 library(tidyverse)
+library(tidycensus)
+library(readxl) #read_excel()
+library(psrccensus)
+library(psrcelmer) # access Elmer CHAS data
 library(sf)
-library(leaflet)
-library(wesanderson)
-library(tigris)
 
 # Working directory
-setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2021")
+setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2026")
+
+
+# Load data set -------------------------------------- 
+# 2026 FLU update
+devcap <- read.csv("./data/13-Development Capacity/08_proximityToTransit.csv")
+
+## Transforming data ----
+
+
+
+
+# Creating spatial data set --------------------------------------
+# Connecting to ElmerGeo for census geographies through Portal, instead of saving spatial file to the project folder
+arc_service <- "https://services6.arcgis.com/GWxg6t7KXELn1thE/arcgis/rest/services"
+tracts20.url <- file.path(arc_service, "Census_Tracts_2020/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson")
+tract <- st_read(tracts20.url)
+
+
+## Joining spatial and tabular data by tract ----
+tract <- merge(tract, notwhite_moe_values,
+               by.x="geoid20",
+               by.y="GEOID",
+               all.x=TRUE)
+
+tract$per_notwhite <- round(tract$per_notwhite, digits = 2)
+
+
+# Exporting data sets ----------------------------------------------- 
+
+## Final data set for percentage by census tract, plus calculation components ----
+race <- race_calc %>% select(GEOID, starts_with("est"), per_notwhite)
+write_csv(race, file = "./data/13-Development Capacity/13_DevelopmentCapacity.csv")
+
+## Final data set with tract information and MOE calculations ----
+write_rds(notwhite_moe_values, "./data/13-Development Capacity/tract_13_DevelopmentCapacity.rds")
+
+# To compare with 2021 update:
+# rds_2021 <- readRDS("Y:/VISION 2050/Data/Displacement/Displacement Index 2021/data/13-Development Capacity/tract_13_DevelopmentCapacity.rds")
+
+
+
+
+
+
+
 
 # Load data
 disp_2018 <- read_csv("Y:/VISION 2050/Data/Displacement/Displacement Index 2021/data/13-Development Capacity/2018by_upd_meth/hh_at_displacement_risk-2021-11-29/hh_at_displacement_risk-2021-11-29.csv")

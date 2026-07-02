@@ -1,66 +1,107 @@
-# 9 Proximity to Current or Future Link Light Rail & Streetcar
-# Percent of area within .5 miles to 2030 ferry, street car, commuter rail and light rail and 
-# .25 miles to 2030 BRT 
-# Descriptive and spatial analysis of the data ------------------------------------------------
+### Descriptive and spatial analysis of the data ------------------------------------------------
 
-# Libraries -----------------------------------------------
-# install.packages(tidyverse)
-# install.packages(sf)
-# install.packages(tigris)
-# install.packages(leaflet)
+# Libraries
+# install.packages('tidyverse')
+# install.packages("tidycensus")
+# install.packages("sf")
+# install.packages("leaflet") 
+# install.packages("wesanderson")
 library(tidyverse)
+library(tidycensus)
 library(sf)
-library(tigris)
 library(leaflet)
-
-# Compare 2025 to 2030
+library(wesanderson)
 
 # Working directory
-setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2021")
+setwd("Y:/VISION 2050/Data/Displacement/Displacement Index 2026")
 
-# Load current data  ----------------------------------------------- 
-prox_2030 <- read.csv("./data/09-Proximity to Current or Future hct/09_futureProximityToTransit.csv") %>% mutate(prop_transit = percent_hct/100)
+# Current data (2023 BY data)
+future_ptt <- read.csv("./data/09-Proximity to Current or Future hct/09_futureProximityToTransit.csv")
 
-# Load previous data (from data folder)
-prox_2025 <- read.csv("Y:/VISION 2050/Data/Displacement/Displacement_Risk_Script/data/009_AreaNear2025Transit.csv")
+future_ptt <- future_ptt %>% 
+  rename(geoid=geoid20) %>% 
+  select(geoid, percent_hct)
+
+# 2014 BY data
+future_ptt_2014 <- read.csv("../Displacement_Risk_Script/data/009_AreaNear2025Transit.csv")
+future_ptt_2014 <- future_ptt_2014 %>% 
+  rename(geoid=geoid10) %>% 
+  select(geoid, percent_hct=percent_area)
+
+# 2018 BY data
+future_ptt_2018 <- read.csv("../Displacement Index 2021/data/09-Proximity to Current or Future hct/09_futureProximityToTransit_old.csv") 
+
+future_ptt_2018 <- future_ptt_2018 %>% 
+  rename(geoid=geoid10) %>% 
+  select(geoid, percent_hct) %>% 
+  mutate(percent_hct=percent_hct/100)
 
 #### Note: 
-# Discrepancy in 2025 data between file,
+# Discrepancy in 2014 BY data between file,
 # Y:/VISION 2050/Data/Displacement/Displacement_Risk_Script/data/009_AreaNear2025Transit.csv
 # and final values in spreadsheet,
 # Y:/Vision 2050/Data/Displacement/displacement-risk-data.xlsx
 
-# Examine discrepancy
-# Load 2025 data (from finalized displacement-risk-data.xlsx file)
-old <- read_excel("Y:/Vision 2050/Data/Displacement/displacement-risk-data.xlsx", sheet = 2, skip = 1)
-old <- old[,c(1,22)]
-names(old) <- c("GEOID", "prop_transit")
+# Examine discrepancy ----
+# Load 2014BY data (from finalized displacement-risk-data.xlsx file)
+old_14 <- read_excel("Y:/Vision 2050/Data/Displacement/displacement-risk-data.xlsx", sheet = 2, skip = 1)
+old_14 <- old_14[,c(1,22)]
+names(old_14) <- c("geoid", "percent_hct")
 
-# Call values in spreadsheet "final"
-old$type <- "OldFinal"
+# Call values in combined spreadsheet "final"
+old_14$DataVersion <- "OldFinal_2014"
+old_14 <- as.data.frame(old_14)
 
 # Call values in folder "draft"
-old_draft <- prox_2025 %>% select(GEOID = geoid10, prop_transit = percent_area)
-old_draft$type <- "OldDraft"
+old_14_draft <- future_ptt_2014 %>% 
+  mutate(DataVersion="OldDraft")
 
-current <- prox_2030 %>% select(GEOID = geoid10, prop_transit) %>% mutate(type = "Current")
+old_18 <- future_ptt_2018 %>% 
+  mutate(DataVersion = "Old_2018")
 
-compare <- rbind(current, old_draft, old)
-compare %>% ggplot(aes(prop_transit, fill = type)) + geom_density(alpha = 0.2) 
+current <- future_ptt %>% 
+  mutate(DataVersion = "Current")
 
-# Population within 1/4 mi of HCT data  ----------------------------------------------- 
-data <- read_csv("./data/09-Proximity to Current or Future hct/09_futureProximityToTransit.csv")
+compare <- rbind(current, old_18, old_14_draft, old_14)
+compare %>% ggplot(aes(percent_hct, fill = DataVersion)) + geom_density(alpha = 0.2) + ggtitle("Percent of tract area w/in 1/4 or 1/2 mi. of future transit") + xlim(0,1)
 
+# compare differences between two 2014 data sets and 2018 (2010 geographies)
+# updated data in 2020 geographies
+future_ptt_both <- old_18 %>%  
+  select(geoid, percent_hct) %>%
+  rename(perc_2018 = percent_hct) %>%
+  #join to 2014 indicator csv data
+  full_join(old_14_draft %>% select(geoid, percent_hct), by = "geoid") %>%
+  rename(perc_2014_draft = percent_hct) %>%
+  mutate(perc_2018 = round(perc_2018,2),
+         perc_2014_draft = round(perc_2014_draft,2),
+         diff_draft = perc_2018 - perc_2014_draft,
+         absdiff_draft = abs(diff_draft)) %>%
+  #join to 2014 combined index excel workbook data
+  full_join(old_14 %>% select(-DataVersion), by = "geoid") %>%
+  rename(perc_2014_final = percent_hct) %>%
+  mutate(perc_2014_final = round(perc_2014_final, 2),
+         diff_final = perc_2018 - perc_2014_final,
+         absdiff_final= abs(diff_final),
+         diff_14 = perc_2014_final-perc_2014_draft,
+         absdiff_14 = abs(diff_14))
+
+future_ptt_both %>% 
+  summary()
+
+# no further investigation into discrepancy needed moving forward (as of 2026 update)
+
+# Tract area within 1/4 mi of future HCT data  -----------------------------------------------
 # Calculate quantiles
-temp = as.data.frame(quantile(data$percent_hct, probs = seq(0, 1, 0.2),na.rm = TRUE))
-# temp$new = unlist(temp$`quantile(data$percent_hct, probs = seq(0, 1, 0.2), na.rm = TRUE)`)
+temp = as.data.frame(quantile(future_ptt$percent_hct, probs = seq(0, 1, 0.2),na.rm = TRUE))
+# temp$new = unlist(temp$`quantile(future_ptt$percent_hct, probs = seq(0, 1, 0.2), na.rm = TRUE)`)
 colnames(temp) <- "new"
 
 # Variable distributions
-data %>% ggplot(aes(percent_hct)) +
+future_ptt %>% ggplot(aes(percent_hct)) +
   geom_histogram(fill="royalblue3") +
   xlab("Percent (%)") + 
-  ggtitle("Distribution of % of area within 1/4 mile of 2030 bus rapid transit \n and 1/2 mile of other 2030 HCT stops/stations") +
+  ggtitle("Distribution of % of area within 1/4 mile of 2035 bus rapid transit \n and 1/2 mile of other 2035 HCT stops/stations") +
   geom_vline(aes(xintercept = quantile(percent_hct, 0.2, na.rm = TRUE), color = "Quintiles")) +
   geom_vline(xintercept = temp$new, colour="black") +
   geom_vline(aes(xintercept = mean(percent_hct, na.rm = TRUE), color = "Mean")) +
@@ -70,17 +111,17 @@ data %>% ggplot(aes(percent_hct)) +
 
 ### Very right-skewed - make visualisations without zeros
 # Calculate quantiles - no zeros
-temp = as.data.frame(quantile(data %>% 
+temp = as.data.frame(quantile(future_ptt %>% 
                                 filter(percent_hct != 0) %>% 
                                 select(percent_hct), probs = seq(0, 1, 0.2),na.rm = TRUE))
-# temp$new = unlist(temp$`quantile(data$percent_hct, probs = seq(0, 1, 0.2), na.rm = TRUE)`)
+# temp$new = unlist(temp$`quantile(future_ptt$percent_hct, probs = seq(0, 1, 0.2), na.rm = TRUE)`)
 colnames(temp) <- "new"
 
 # Variable distributions - exclude zeros
-data %>% filter(percent_hct != 0) %>% ggplot(aes(percent_hct)) +
+future_ptt %>% filter(percent_hct != 0) %>% ggplot(aes(percent_hct)) +
   geom_histogram(fill="royalblue3") +
   xlab("Percent (%)") + 
-  ggtitle("Distribution of % of area within 1/4 mile of 2030 bus rapid transit \n and 1/2 mile of other 2030 HCT stops/stations") +
+  ggtitle("Distribution of % of area within 1/4 mile of 2035 bus rapid transit \n and 1/2 mile of other 2035 HCT stops/stations") +
   geom_vline(aes(xintercept = quantile(percent_hct[percent_hct != 0], 0.2, na.rm = TRUE), color = "Quintiles")) +
   geom_vline(xintercept = temp$new, colour="black") +
   geom_vline(aes(xintercept = mean(percent_hct, na.rm = TRUE), color = "Mean")) +
@@ -88,114 +129,178 @@ data %>% filter(percent_hct != 0) %>% ggplot(aes(percent_hct)) +
   scale_color_manual(name = "Statistics", 
                      values = c("Quintiles" = "black", "Mean" = "red", "Median" = "orange"))
 
-### Exploring issues with UrbanSim output by examining values alongside transit stops
-# Transit stops
-hct_2030 = read_sf('T:/2021December/Stefan/Polina/2030/hct_stops_2030.shp')
-brt_2030 = read_sf('T:/2021December/Stefan/Polina/2030/brt_stops_2030.shp')
 
-hct_2030_upd = hct_2030 %>% 
-                    st_as_sf(coords = c("geometry")) %>% 
-                    st_transform(2285) %>% 
-                    st_transform(4326)
+# Compare 2014, 2018, and 2023 distributions
+mean_future_ptt_2014 = mean(future_ptt_2014$percent_hct,na.rm = TRUE)
+mean_future_ptt_2018 = mean(future_ptt_2018$percent_hct,na.rm = TRUE)
+mean_future_ptt_2023 = mean(future_ptt$percent_hct,na.rm = TRUE)
 
-brt_2030_upd = brt_2030 %>% 
-  st_as_sf(coords = c("geometry")) %>% 
-  st_transform(2285) %>% 
-  st_transform(4326)
+# Bind data sets
+future_ptt_2014$year = as.factor(2014)
+future_ptt_2018$year = as.factor(2018)
+future_ptt$year = as.factor(2023)
 
-prox_both = prox_2030 %>% 
-  select(geoid10, percent_hct) %>%
-  rename(area_2030 = percent_hct) %>%
-  full_join(prox_2025, by = "geoid10") %>% 
-  rename(area_2025 = percent_area) %>%
-  mutate(area_2030_upd = replace_na(area_2030, 0), 
-         area_2025_upd = replace_na(area_2025, 0),
-         diff_draft = area_2030_upd - area_2025_upd) %>%
-  full_join(old %>% select(-type), by = c("geoid10" = "GEOID")) %>%
-  mutate(area_2025_final = replace_na(prop_transit, 0), 
-         diff_final = area_2030_upd - area_2025_final,
-         geoid10 = as.character(geoid10))
+future_ptt_all <- rbind(future_ptt_2014, future_ptt_2018, future_ptt)
 
-prox_both %>% 
-  summary()
+future_ptt_all %>% ggplot(aes(percent_hct, fill = year))+
+  geom_density(alpha=.2)
 
-# Get tract shapefiles
+future_ptt_all %>% ggplot(aes(percent_hct, fill = year))+
+  geom_density(alpha=.2)+
+  geom_vline(aes(xintercept=mean_future_ptt_2014),
+             color="salmon", linetype="dashed", linewidth=1)+
+  geom_vline(aes(xintercept=mean_future_ptt_2018),
+             color="cadetblue", linetype="dashed", linewidth=1)+
+  geom_vline(aes(xintercept=mean_future_ptt_2023),
+             color="royalblue", linetype="dashed", linewidth=1)
 
-psrc_tracts <- tracts("WA", county = c(033,035,053,061), cb = TRUE) %>%
-  st_as_sf() %>%
-  st_transform(crs=4326) %>% 
-  left_join(prox_both, by = c("GEOID"= "geoid10"))
 
-# Map difference
-bins <- c(min(psrc_tracts$diff_draft),-0.35,-0.18, 0, 0.15, 0.32, 0.5, 0.66, 0.83, max(psrc_tracts$diff_final))
-pal <- colorBin("PRGn", domain = psrc_tracts$diff_final, bins = bins)
 
-m <- leaflet(psrc_tracts)%>%
+# Mapping -----------------------------------------------
+# Get tract shapefiles ----
+arc_service <- "https://services6.arcgis.com/GWxg6t7KXELn1thE/arcgis/rest/services"
+tracts10.url <- file.path(arc_service, "Census_Tracts_2010/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson")
+tracts20.url <- file.path(arc_service, "Census_Tracts_2020/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson")
+tract_10 <- st_read(tracts10.url)
+tract_20 <- st_read(tracts20.url)
+
+
+## Joining spatial and tabular data by tract ----
+tract <- merge(tract_10, future_ptt_both,
+               by.x="geoid10",
+               by.y="geoid",
+               all.x=TRUE)
+
+tract_ptt <- merge(tract_20, future_ptt,
+                   by.x="geoid20",
+                   by.y="geoid",
+                   all.x=TRUE)
+
+## Separate years ----
+
+# Map 2023by data
+bins <- seq(min(tract_ptt$percent_hct, na.rm = TRUE), max(tract_ptt$percent_hct, na.rm = TRUE), length = 5)
+pal <- colorBin("YlGnBu", domain = tract_ptt$percent_hct, bins = bins)
+
+m <- leaflet(tract_ptt)%>%
   addProviderTiles(providers$CartoDB.Positron) %>%
-  addPolygons(data = psrc_tracts,
+  addPolygons(data=tract_ptt,
               stroke = T,
               opacity = 1,
-              weight = 1,
-              fillColor = ~pal(psrc_tracts$diff_final),
+              weight = 0.2,
+              fillColor = ~pal(tract_ptt$percent_hct),
               fillOpacity = 0.7,
-              popup = paste("new - old (final) difference: ", psrc_tracts$diff_final,"<br>",
-                            "% of area within 0.5 miles to high capcity transit in 2025: ", psrc_tracts$area_2025_upd,"<br>",
-                            "% of area within 0.5 miles to high capcity transit in 2030: ", psrc_tracts$area_2030_upd,"<br>",
-                            "tract", psrc_tracts$TRACTCE
+              popup = paste("percent of tract area within 0.25 or 0.5 miles to 2035 transit in 2023BY: ", tract_ptt$percent_hct,"%<br>",
+                            "tract: ", tract_ptt$geoid20
               )) %>% 
-  addLegend(pal = pal, values = psrc_tracts$diff_final, opacity = 0.7, title = "Difference between 2030 and 2025 (final) of % of area 0.25 miles of future BRT and 0.5 mile of future rail and other hct stops/stations",
+  addLegend(pal = pal, values = tract_ptt$percent_hct, opacity = 0.7, title = "Percent of tract area within 0.25 or 0.5 miles to 2035 transit, 2023BY (%)",
             position = "bottomright")
 print(m)
 
-# Map 2030
-bins <- c(min(psrc_tracts$area_2030_upd,na.rm = TRUE),0.1,0.2,0.3, 0.4,0.5,0.6,0.7,0.8,0.9, max(psrc_tracts$area_2030_upd,na.rm = TRUE))
-pal <- colorBin("BuGn", domain = psrc_tracts$area_2030_upd, bins = bins)
 
-m <- leaflet(psrc_tracts) %>%
+# Map 2018by data
+bins <- seq(min(tract$perc_2018, na.rm = TRUE), max(tract$perc_2018, na.rm = TRUE), length = 5)
+pal <- colorBin("YlGnBu", domain = tract$perc_2018, bins = bins)
+
+m <- leaflet(tract)%>%
   addProviderTiles(providers$CartoDB.Positron) %>%
-  addPolygons(data = psrc_tracts,
+  addPolygons(data=tract,
               stroke = T,
               opacity = 1,
-              weight = 1,
-              fillColor = ~pal(psrc_tracts$area_2030_upd),
+              weight = 0.2,
+              fillColor = ~pal(tract$perc_2018),
               fillOpacity = 0.7,
-              popup = paste("% of area within 0.5 miles to high capcity transit in 2025: ", psrc_tracts$area_2025_upd,"<br>",
-                            "% of area within 0.5 miles to high capcity transit in 2030: ", psrc_tracts$area_2030_upd,"<br>",
-                            "tract", psrc_tracts$TRACTCE
+              popup = paste("percent of tract area within 0.25 or 0.5 miles to 2030 transit in 2018BY: ", tract$perc_2018,"%<br>",
+                            "tract: ", tract$geoid10
               )) %>% 
-  # addCircleMarkers(data = hct_2030_upd,
-  #                  radius = 2,
-  #                  color = "darkred",
-  #                  fillOpacity = 0.9) %>% 
-  # addCircleMarkers(data = brt_2030_upd,
-  #                  radius = 2,
-  #                  color = "green4",
-  #                  fillOpacity = 0.9) %>%
-  addLegend(pal = pal, values = psrc_tracts$area_2030_upd, opacity = 0.7, title = "2030: % of area within 0.25 miles of future BRT and 0.5 mile of future rail and other hct stops/stations",
-            position = "bottomright") # %>% 
-#   addLegend(colors = "darkred", labels = "High capacity transit stops", opacity = 0.7,
-#             position = "bottomright") %>% 
-# addLegend(colors = "black", labels = "BRT stops", opacity = 0.7,
-#           position = "bottomright")
+  addLegend(pal = pal, values = tract$perc_2018, opacity = 0.7, title = "Percent of tract area within 0.25 or 0.5 miles to 2030 transit, 2018BY (%)",
+            position = "bottomright")
 print(m)
 
-# Map 2025
-bins <- c(min(psrc_tracts$area_2025_final,na.rm = TRUE),0.1,0.2,0.3, 0.4,0.5,0.6,0.7,0.8,0.9, max(psrc_tracts$area_2025_final,na.rm = TRUE))
-pal <- colorBin("BuGn", domain = psrc_tracts$area_2025_final, bins = bins)
+# Map 2014by data
+bins <- seq(min(tract$perc_2014_draft, na.rm = TRUE), max(tract$perc_2014_draft, na.rm = TRUE), length = 5)
+pal <- colorBin("YlGnBu", domain = tract$perc_2014_draft, bins = bins)
 
-m <- leaflet(psrc_tracts)%>%
+
+m <- leaflet(tract)%>%
   addProviderTiles(providers$CartoDB.Positron) %>%
-  addPolygons(data=psrc_tracts,
+  addPolygons(data=tract,
               stroke = T,
               opacity = 1,
-              weight = 1,
-              fillColor = ~pal(psrc_tracts$area_2025_final),
+              weight = 0.2,
+              fillColor = ~pal(tract$perc_2014_draft),
               fillOpacity = 0.7,
-              popup = paste(
-                "% of area within 0.5 miles to high capcity transit in 2025: ", psrc_tracts$area_2025_final,"<br>",
-                "% of area within 0.5 miles to high capcity transit in 2030: ", psrc_tracts$area_2030_final,"<br>",
-                "tract", psrc_tracts$TRACTCE
+              popup = paste("percent of tract area within 0.25 or 0.5 miles to 2025 transit in 2014BY: ", tract$perc_2014_draft,"%<br>",
+                            "tract: ", tract$geoid
               )) %>% 
-  addLegend(pal = pal, values = psrc_tracts$area_2025_final, opacity = 0.7, title = "2025 (final): % of area within 0.5 mile of future high capacity transit stops/stations",
+  addLegend(pal = pal, values = tract$perc_2014_draft, opacity = 0.7, title = "Percent of tract area within 0.25 or 0.5 miles to 2025 transit, 2014BY (%)",
+            position = "bottomright")
+print(m)
+
+
+## Comparing differences ----
+
+# Map 2018-2014 (final xlsx) absolute difference
+bins <- seq(min(tract$absdiff_final, na.rm = TRUE), max(tract$absdiff_final, na.rm = TRUE), length = 7)
+pal <- colorBin("YlOrRd", domain = tract$absdifference, bins = bins)
+
+m <- leaflet(tract)%>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(data=tract,
+              stroke = T,
+              opacity = 1,
+              weight = 0.2,
+              fillColor = ~pal(tract$absdiff_final),
+              fillOpacity = 0.7,
+              popup = paste("2018 to 2014 (final xlsx) abs difference: ", tract$absdiff_final,"<br>",
+                            "percent of tract area within 0.25 or 0.5 miles to 2025 transit in 2014by (draft csv): ", tract$perc_2014_draft,"%<br>",
+                            "percent of tract area within 0.25 or 0.5 miles to 2025 transit in 2014by (final xlsx): ", tract$perc_2014_final,"%<br>",
+                            "percent of tract area within 0.25 or 0.5 miles to 2025 transit in 2018by: ", tract$perc_2018,"%<br>",
+                            "tract: ", tract$geoid10
+              )) %>% 
+  addLegend(pal = pal, values = tract$absdiff_final, opacity = 0.7, title = "Absolute difference between 2018by and 2014by (final xlsx) percents of tract area within 0.25 or 0.5 miles to 2025 transit (%)",
+            position = "bottomright")
+print(m)
+
+# Map 2018-2014 (draft csv) absolute difference
+bins <- seq(min(tract$absdiff_draft, na.rm = TRUE), max(tract$absdiff_draft, na.rm = TRUE), length = 7)
+pal <- colorBin("YlOrRd", domain = tract$absdifference, bins = bins)
+
+m <- leaflet(tract)%>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(data=tract,
+              stroke = T,
+              opacity = 1,
+              weight = 0.2,
+              fillColor = ~pal(tract$absdiff_draft),
+              fillOpacity = 0.7,
+              popup = paste("2018 to 2014 (draft csv) abs difference: ", tract$absdiff_draft,"<br>",
+                            "percent of tract area within 0.25 or 0.5 miles to 2025 transit in 2014by (draft csv): ", tract$perc_2014_draft,"%<br>",
+                            "percent of tract area within 0.25 or 0.5 miles to 2025 transit in 2014by (final xlsx): ", tract$perc_2014_final,"%<br>",
+                            "percent of tract area within 0.25 or 0.5 miles to 2025 transit in 2018by: ", tract$perc_2018,"%<br>",
+                            "tract: ", tract$geoid10
+              )) %>% 
+  addLegend(pal = pal, values = tract$absdiff_draft, opacity = 0.7, title = "Absolute difference between 2018by and 2014by (draft csv) percent of tract area within 0.25 or 0.5 miles to 2025 transit (%)",
+            position = "bottomright")
+print(m)
+
+# Map 2014 (final xlsx) - 2014 (draft csv) absolute difference
+bins <- seq(min(tract$absdiff_14, na.rm = TRUE), max(tract$absdiff_14, na.rm = TRUE), length = 7)
+pal <- colorBin("YlOrRd", domain = tract$absdiff_14, bins = bins)
+
+m <- leaflet(tract)%>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(data=tract,
+              stroke = T,
+              opacity = 1,
+              weight = 0.2,
+              fillColor = ~pal(tract$absdiff_14),
+              fillOpacity = 0.7,
+              popup = paste("2014 (final xlsx) to 2014 (draft csv) abs difference: ", tract$absdiff_14,"<br>",
+                            "percent of tract area within 0.25 or 0.5 miles to 2025 transit in 2014by (draft csv): ", tract$perc_2014_draft,"%<br>",
+                            "percent of tract area within 0.25 or 0.5 miles to 2025 transit in 2014by (final xlsx): ", tract$perc_2014_final,"%<br>",
+                            "tract: ", tract$geoid10
+              )) %>% 
+  addLegend(pal = pal, values = tract$absdiff_14, opacity = 0.7, title = "Absolute difference between 2014by (final xlsx) and 2014by (draft csv) percent of tract area within 0.25 or 0.5 miles to 2025 transit (%)",
             position = "bottomright")
 print(m)
