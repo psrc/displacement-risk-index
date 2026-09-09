@@ -13,4 +13,4 @@ Thankfully, the API results were saved as intermediates, so I regenerated tract 
 I'll mention, that the 10km is returned both for API failures as well as when no results get returned, so it's not perfect. Also, by definition that max search distance is an undercount when no amenity was found. Still, the current results will be much better, as well as being more directly comparable to the 2021 method it's meant to replicate."
 
 ## Exploration
-For the 2026 update, there was additional exploration into alternative data sources. This process is documented here (README.md)
+For the 2026 update, there was additional exploration into alternative data sources. This process is documented in the network project folder (Y:\VISION 2050\Data\Displacement\Displacement Index 2026\docs\Displacement Risk Index - project update notes.docx)
