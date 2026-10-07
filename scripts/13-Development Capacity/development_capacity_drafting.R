@@ -293,9 +293,10 @@ attributes(legend_pal_dif) <- attributes(legend_pal_base)
 
 m <- leaflet(less_restrictive_tract_sf)%>%
   # addProviderTiles(providers$OpenStreetMap) %>%  # default OSM
-  # addProviderTiles(providers$OpenStreetMap.HOT) %>%
-  addProviderTiles(providers$Stadia.AlidadeSmooth) %>%
-  # addProviderTiles(providers$CartoDB.Positron) %>%
+  addProviderTiles(providers$OpenStreetMap.HOT) %>%
+  addProviderTiles(providers$OpenStreetMap.HOT) %>%
+  # addProviderTiles(providers$Stadia.AlidadeSmooth) %>% # watermark - issue with authentication
+  # addProviderTiles(providers$CartoDB.Positron) %>% #watermark - requires API
   addLayersControl(overlayGroups = c("Old, 2021 update",
                                      "Less Restrictive, 2026 update",
                                      "More Restrictive, 2026 update",
